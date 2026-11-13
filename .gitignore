@@ -1,0 +1,3 @@
+# Your own configs and items stay on your computer. Only the example is shared.
+config/*
+!config/example.conf

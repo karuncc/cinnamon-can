@@ -1,0 +1,5 @@
+# Language: the display language and formats of YOUR account (as set in
+# System Settings > Languages). No sudo needed.
+description = Display language and formats of your account
+default     = on
+special     = language

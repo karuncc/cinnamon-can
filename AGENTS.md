@@ -1,0 +1,133 @@
+# AGENTS.md — working on cinnamon-can
+
+(`CLAUDE.md` is a link to this file: every tool reads the same rules.)
+
+## What this is
+
+A small command-line tool that keeps a Linux Mint Cinnamon desktop in
+"cans" (snapshots) and puts it back:
+
+- `seal [-L TEXT]` makes a can, `list` shows cans, `peek CAN` shows what is
+  inside, `diff CAN [CAN2]` compares, `open CAN` makes the computer match a
+  can (shows the diff, asks for `yes`, saves an "autocan" first, then
+  restarts the computer).
+- Goal: after `open` on another computer, the desktop looks, is arranged
+  and feels (mouse, keyboard) exactly the same, except for apps that are
+  installed differently. Personal things and pure hardware (screens,
+  volume, device names) are left out unless an optional item asks for them.
+
+## Hard rules
+
+- **bash + POSIX awk only.** Mint ships `mawk`: no gawk-only features
+  (`gensub`, `asort`, `IGNORECASE`, `@include` ...). Only tools present on
+  a fresh Mint install. No Python, Node or anything to install.
+- Everything in the repo is **English**: code, comments, output, docs.
+  Comments are written for readers who are **not programmers**.
+- `set -euo pipefail` is on: a pipeline whose first part can fail (e.g.
+  `find` on a missing folder) needs `|| true`, or the program stops
+  silently.
+- Two bash traps that have already bitten this project: with `set -e`, an
+  assignment `x="$(command)"` stops the whole program when the command
+  fails (add `|| true` when that is not meant); and `IFS=$'\t' read`
+  treats tab characters next to each other as ONE separator, so an empty
+  middle column shifts all later columns (write a placeholder such as
+  `(default)` instead of leaving a column empty).
+- sudo is only used by `sudo cinnamon-can open CAN`. The program then
+  re-runs itself as the real user (`CC_SYSTEM_RESTORE=1`) and calls `sudo`
+  only to write system files. Never run anything else as root.
+- No junk files: temporary data goes into `make_tmpdir` (removed on exit);
+  cans are written as `.part` and renamed when complete.
+- Never put the owner's machine names, user name or hardware model in repo
+  files; use generic examples (`mylaptop`, `alex`). The copyright line in
+  `LICENSE` is the one agreed exception.
+
+## Layout
+
+```
+cinnamon-can          command line, sudo hand-over, dispatch to lib/
+items/*.item          built-in items (one file per item)
+lib/common.sh         messages, temp folder, INI reading, config,
+                      system facts, can IDs and lookup, log, utilities
+lib/items.sh          reads item files, item_on, patterns for the awk files
+lib/dconf.awk         sorts dconf settings into items (longest path wins)
+lib/files.awk         sorts home files into items (longest path wins)
+lib/collect.sh        reads this computer into a tree (shared by all)
+lib/refs.sh           finds what a can needs that this computer lacks
+lib/list.sh           list, peek, reading cans and manifests
+lib/diff.sh           views, comparison, the diff report
+lib/seal.sh           seal, package_can
+lib/open.sh           open: confirm, autocan, apply, log, restart
+test/run-tests.sh     the test script (safe to run on this computer)
+config/example.conf   the documented example config (the only tracked one)
+README.md             the user guide
+AGENTS.md             these rules (CLAUDE.md is a link to it)
+CONTRIBUTING.md       branches, commit messages, pull requests, releases
+LICENSE               MIT
+```
+
+## Formats
+
+- **Item file** `NAME.item` (no sections): `description`, `default`
+  (on|off), `dconf`, `files`, `exclude`, `system`, `special`
+  (wallpaper|language|timezone|software|crontab) and `ignore`
+  (`~/file:start-of-line` pairs: such lines do not count when comparing,
+  but the file is still restored whole). Indented lines continue a value;
+  `  #` starts a comment. User items live in `items/` next to the config
+  and may not reuse a built-in name.
+- **Config** `config/default.conf`: `[general] backup_dir`, `[items] name =
+  yes|no`. Required; created from `config/example.conf`.
+- **Can** `{manual|autocan}-ID-YYYYMMDDTHHMMSS±HHMM.tar.gz.canned`, ID = 4
+  characters from `23456789ABCDEFGHJKMNPQRSTUVWXYZ`, unique. Inside:
+  `manifest.txt`, `catalog/{builtin,user}/*.item` (every item file known
+  at seal time), `items/ITEM/{dconf.ini,home/,root/,wallpaper/,
+  wallpaper.txt,language.txt,timezone.txt,software.txt,crontab.txt}`.
+- **Log** `backup_dir/cinnamon-can.log`: seal and open only, `key=value`.
+- Ownership: the longest matching path of ALL items (also switched-off
+  ones) wins, user items win ties; catch-alls `other` and `app-settings`.
+  `diff` and `open` always split both sides with the **can's** catalog.
+
+## Testing
+
+- After every change, run the test script (it starts with `bash -n` on
+  every script):
+
+      bash test/run-tests.sh
+
+  It needs no set-up, writes only into its own temporary folder, and
+  never touches the real backup folder or any setting: `open` is only
+  exercised in the two cases where it stops by itself, with closed input
+  and a fake `systemctl` first in PATH. A few tests compare a can against
+  the LIVE computer and can fail when a setting changes mid-run — run the
+  script again before hunting for a bug. New behaviour should come with a
+  new check in this script.
+- NOT covered by the script: really applying a can (`open` + `yes`),
+  sudo, language, system files and the restart. For those, the rules
+  below apply.
+- On the development machine run only `seal`, `list`, `peek`, `diff`, and
+  `open` on a can that already matches (it stops before asking). **Never
+  answer `yes` to `open` on the real machine** unless the owner asks for it;
+  then seal a safety can first, put a `systemctl` shim in `PATH` so the
+  machine does not restart under you, and end on the safety can.
+- `sudo` does not search `~/.local/bin`: messages and docs must show the
+  full path of the program for `sudo ... open`.
+- Real writes are tested in a sandbox: `dbus-run-session` with a fake
+  `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_RUNTIME_DIR`, `PAGER=cat`
+  and shims in `PATH` for `systemctl` (no reboot), `busctl call` (no
+  language change), `crontab`, `fcitx-remote` and `sudo`. Use `script` to
+  give `open` a terminal. Language, system files and the restart can only
+  be tested on the real machine, and only with the owner's permission
+  (writing the values that are already there).
+
+## Git
+
+Commit, branch or push only when the person you are working with asks
+for it — in the owner's own checkout that means never: the owner makes
+every commit, and you propose the branch name and the commit message
+only. Whoever types it, person or AI, every branch and commit follows
+`CONTRIBUTING.md` in this folder; nothing outside the repo is needed.
+Changes reach this repository as pull requests under the same rules.
+
+Before proposing a commit message, read the repository's actual state
+(`git status`, `git diff`, the current branch) and describe what really
+changed — not what you remember changing. When the changes mix unrelated
+work, propose splitting them into separate commits.

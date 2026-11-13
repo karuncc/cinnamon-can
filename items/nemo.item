@@ -1,0 +1,6 @@
+# Nemo: the file manager.
+description = File manager preferences, sidebar bookmarks, Nemo actions and scripts
+default     = on
+dconf       = /org/nemo/
+files       = ~/.config/gtk-3.0/bookmarks
+              ~/.local/share/nemo/

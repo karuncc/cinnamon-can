@@ -1,0 +1,10 @@
+# App settings: settings that apps keep in the settings database (Text
+# Editor, Terminal, ...). The catch-all for everything outside the desktop.
+description = Settings apps keep in the settings database (Text Editor, Terminal ...)
+default     = on
+dconf       = /
+# These lines record what THIS computer did (when it last checked for
+# updates, what its installer put on), not settings you chose.
+exclude     = /com/linuxmint/updates/install-last-run
+              /com/linuxmint/updates/refresh-last-run
+              /com/linuxmint/install/installed-apps

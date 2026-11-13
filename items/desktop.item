@@ -1,0 +1,7 @@
+# Desktop: the icons on the desktop and where they sit.
+description = Desktop icons and their positions
+default     = on
+dconf       = /org/nemo/desktop/
+files       = ~/.config/nemo/
+# Nemo rewrites this time stamp by itself after every login.
+ignore      = ~/.config/nemo/desktop-metadata:nemo-icon-view-layout-timestamp=

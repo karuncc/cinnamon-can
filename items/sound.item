@@ -1,0 +1,9 @@
+# Sound: sound effects and alerts. (The sound applet's own options, such
+# as showing album art, belong to the panel item.) Sound themes you
+# installed yourself travel along, like themes and icons do.
+description = Sound effects, alert sounds, your own sound themes
+default     = on
+dconf       = /org/cinnamon/sounds/
+              /org/cinnamon/desktop/sound/
+              /org/gnome/desktop/sound/
+files       = ~/.local/share/sounds/

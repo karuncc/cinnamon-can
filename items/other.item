@@ -1,0 +1,14 @@
+# Other: every desktop setting that no item above claims, such as date and
+# time format, notifications, accessibility and privacy. A catch-all, so
+# nothing is lost.
+description = Remaining desktop settings: date & time, notifications, accessibility, privacy
+default     = on
+dconf       = /org/cinnamon/
+              /org/gnome/desktop/
+              /org/gnome/settings-daemon/
+              /org/gtk/
+              /org/freedesktop/
+              /org/cinnamon/desktop/interface/clock-*
+              /org/gnome/desktop/interface/clock-*
+              /org/cinnamon/desktop/interface/first-day-of-week
+              /org/gnome/desktop/interface/toolkit-accessibility

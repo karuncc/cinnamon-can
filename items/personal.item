@@ -1,0 +1,7 @@
+# Optional. Things about you: your account picture, desktop launchers,
+# the words you added to the spelling dictionary ("Add to dictionary"),
+# and your "New Document" templates for the file manager.
+description = Account picture, desktop launchers, dictionary words, templates
+default     = off
+files       = ~/.face  ~/Desktop/*.desktop
+              ~/.config/enchant/  ~/Templates/

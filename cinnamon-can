@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+#
+# cinnamon-can -- keep your Linux Mint Cinnamon desktop in "cans".
+#
+#   seal   put the current desktop settings into a new can
+#   list   show all cans
+#   peek   show what is inside one can
+#   diff   show what differs: a can and this computer, or two cans
+#   open   make this computer match a can (after showing the diff and
+#          asking you), then restart
+#
+# This file only reads the command line and hands over to lib/.
+
+# Stop on mistakes instead of carrying on:
+#   -e  a failing command stops the program
+#   -u  using an unknown variable (usually a typo) stops the program
+#   -o pipefail  a pipeline fails if any part of it fails
+set -euo pipefail
+
+CC_VERSION="1.0.0"
+
+# The folder this program lives in, even when called through a symlink.
+CC_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+
+# shellcheck source=lib/common.sh
+source "$CC_ROOT/lib/common.sh"
+# shellcheck source=lib/items.sh
+source "$CC_ROOT/lib/items.sh"
+
+usage() {
+    cat <<EOF
+cinnamon-can $CC_VERSION -- keep your Linux Mint Cinnamon desktop in cans
+
+Usage:
+  cinnamon-can [-c CONFIG] COMMAND
+
+Commands:
+  seal [-L TEXT]      Put the current settings into a new can (-L, --label:
+                      a short description stored with the can)
+  list                Show all cans
+  peek CAN            Show what is inside a can
+  diff CAN [CAN2]     Show what differs between a can and this computer,
+                      or between two cans
+  open CAN            Show the differences, ask, then make this computer
+                      match the can and restart. Run it with sudo and
+                      the full path of this program to also restore
+                      system files.
+
+  CAN is a can's ID (as shown by "list") or the path to a can file.
+
+Options:
+  -c, --config-file NAME|PATH   use config/NAME.conf or that file
+                                (default: config/default.conf)
+  -v, --version                 show the version
+  -h, --help                    show this help
+EOF
+}
+
+main() {
+    local config_name="" command=""
+    local -a rest=()
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -c|--config-file)
+                [ $# -ge 2 ] || die "$1 needs a config name or path"
+                config_name="$2"; shift 2; continue ;;
+            --config-file=*) config_name="${1#--config-file=}" ;;
+            -v|--version)    say "cinnamon-can $CC_VERSION"; exit 0 ;;
+            -h|--help|help)  usage; exit 0 ;;
+            *)
+                if [ -z "$command" ] && [[ "$1" != -* ]]; then command="$1"; else rest+=("$1"); fi ;;
+        esac
+        shift
+    done
+
+    case "$command" in
+        seal|list|peek|diff|open) ;;
+        "") usage; exit 0 ;;
+        *)  err "unknown command \"$command\""; say "Run \"cinnamon-can help\" for the commands."; exit 2 ;;
+    esac
+
+    # sudo is only meant for "open" (to also restore system files). The
+    # program then continues as YOU, so every file it touches in your home
+    # stays yours; only the system files are written with sudo.
+    if [ "$(id -u)" -eq 0 ]; then
+        if [ "$command" = "open" ] && [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+            local uid home
+            uid="$(id -u "$SUDO_USER")"
+            home="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+            exec sudo -u "$SUDO_USER" env PATH="$PATH" HOME="$home" TERM="${TERM:-dumb}" \
+                DISPLAY="${DISPLAY:-}" XDG_RUNTIME_DIR="/run/user/$uid" \
+                DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+                CC_SYSTEM_RESTORE=1 "$CC_ROOT/cinnamon-can" ${config_name:+-c "$config_name"} \
+                open "${rest[@]+"${rest[@]}"}"
+        fi
+        die "run cinnamon-can as your normal user (only \"open\" may be run with sudo)"
+    fi
+
+    load_system_facts
+    startup_checks
+    load_config "$config_name"
+    load_items "$CC_ROOT/items" "$USER_ITEMS_DIR"
+    check_config_items
+
+    # "list" and "peek" share lib/list.sh; every other command has its own file.
+    local module="$command"
+    [ "$command" != "peek" ] || module="list"
+    # shellcheck source=/dev/null
+    source "$CC_ROOT/lib/$module.sh"
+    "cmd_$command" "${rest[@]+"${rest[@]}"}"
+}
+
+main "$@"

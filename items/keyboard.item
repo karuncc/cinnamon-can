@@ -1,0 +1,18 @@
+# Keyboard: layouts, every shortcut, typing speed and input method.
+description = Keyboard layouts, all shortcuts, repeat speed, input method
+default     = on
+dconf       = /org/cinnamon/desktop/keybindings/
+              /org/cinnamon/desktop/input-sources/
+              /org/gnome/desktop/input-sources/
+              /org/cinnamon/desktop/peripherals/keyboard/
+              /org/gnome/desktop/peripherals/keyboard/
+              /org/cinnamon/desktop/interface/keyboard-layout-*
+              /org/gnome/desktop/interface/gtk-im-*
+              /org/cinnamon/desktop/interface/cursor-blink*
+              /org/gnome/desktop/interface/cursor-blink*
+              /org/gnome/libgnomekbd/
+              /desktop/ibus/
+              /org/freedesktop/ibus/
+files       = ~/.xinputrc
+              ~/.config/fcitx/config  ~/.config/fcitx/profile  ~/.config/fcitx/conf/
+              ~/.config/fcitx5/config ~/.config/fcitx5/profile ~/.config/fcitx5/conf/

@@ -1,0 +1,237 @@
+#!/usr/bin/env bash
+#
+# test/run-tests.sh -- checks cinnamon-can without changing this computer.
+#
+# Run it from anywhere:    bash test/run-tests.sh
+#
+# Everything is written into one temporary folder that is removed at the
+# end; the real backup folder and the computer's settings are never
+# touched. "open" is only run in the two cases where it stops by itself
+# (nothing differs / only system files differ), always with closed input
+# (so it can never wait for an answer) and with a fake "systemctl" first
+# in PATH (so nothing could ever restart the computer).
+#
+# Covered: every script's syntax, the command line, the start-up errors
+# (also with a broken "cinnamon"), seal / list / peek / diff, cans with a
+# broken manifest, the diff columns and their order, which item owns
+# which setting and which file, what is excluded and what is never kept.
+#
+# NOT covered -- follow the Testing rules in AGENTS.md instead: really
+# applying a can ("open" + yes), sudo, language, system files, restart.
+#
+# The tests under "against the live computer" compare a can with this
+# computer RIGHT NOW; they can fail when a setting changes on this
+# computer while the tests run. When one fails, run the script again
+# before looking for a bug.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+CC="$ROOT/cinnamon-can"
+TAB=$'\t'
+
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/cinnamon-can-test.XXXXXXXX")"
+# (a plain trap, not a cleanup function: lib/common.sh, which the last
+# test section loads, has a cleanup function of its own)
+trap 'rm -rf "$TMP"' EXIT
+trap 'exit 130' INT TERM
+
+FAILS=0 TESTS=0
+pass() { TESTS=$((TESTS + 1)); printf '  ok   %s\n' "$1"; }
+fail() { TESTS=$((TESTS + 1)); FAILS=$((FAILS + 1)); printf '  FAIL %s\n' "$1"; }
+# check TEXT COMMAND... -> pass or fail by whether the command succeeds.
+check()   { local msg="$1"; shift; if "$@" >/dev/null 2>&1; then pass "$msg"; else fail "$msg"; fi; }
+has()     { printf '%s' "$1" | grep -qF -- "$2"; }
+hasnt()   { ! has "$1" "$2"; }
+section() { printf '\n== %s\n' "$1"; }
+
+# run STATUS_VAR OUTPUT_VAR COMMAND... -> runs the command with closed
+#   input and keeps its exit code and everything it printed.
+run() {
+    local _s=0 _o
+    _o="$("${@:3}" </dev/null 2>&1)" || _s=$?
+    printf -v "$1" '%s' "$_s"
+    printf -v "$2" '%s' "$_o"
+}
+
+# The test config: cans go into the temporary folder, items stay at
+# their defaults (so hardware and personal are OFF).
+CONF="$TMP/test.conf"
+printf '[general]\nbackup_dir = %s\n' "$TMP/cans" > "$CONF"
+
+# A fake systemctl, first in PATH for every test: even if a test went
+# completely wrong, the computer could not restart.
+mkdir -p "$TMP/safe"
+printf '#!/bin/sh\necho "systemctl $* (ignored by the tests)"\n' > "$TMP/safe/systemctl"
+chmod +x "$TMP/safe/systemctl"
+PATH="$TMP/safe:$PATH"
+
+
+section "every script is valid bash"
+for f in "$CC" "$ROOT"/lib/*.sh "${BASH_SOURCE[0]}"; do
+    check "bash -n $(basename "$f")" bash -n "$f"
+done
+
+
+section "command line"
+run s out "$CC" --version
+check "--version: exit 0"              [ "$s" -eq 0 ]
+check "--version names the program"    has "$out" "cinnamon-can "
+run s out "$CC" help
+check "help: exit 0"                   [ "$s" -eq 0 ]
+run s out "$CC" frobnicate
+check "unknown command: exit 2"        [ "$s" -eq 2 ]
+check "unknown command: message"       has "$out" "unknown command"
+run s out "$CC" -c no-such-config list
+check "missing config: exit 1"         [ "$s" -eq 1 ]
+check "missing config: message"        has "$out" "config file not found"
+
+
+section "start-up checks"
+mkdir -p "$TMP/broken-tool"
+printf '#!/bin/sh\nexit 1\n' > "$TMP/broken-tool/cinnamon"
+chmod +x "$TMP/broken-tool/cinnamon"
+run s out env PATH="$TMP/broken-tool:$PATH" "$CC" list
+check "broken cinnamon: exit 1, not a silent stop"  [ "$s" -eq 1 ]
+check "broken cinnamon: clear message"              has "$out" "could not find Cinnamon"
+
+
+section "seal, list, peek"
+run s out "$CC" -c "$CONF" seal -L "test can"
+check "seal: exit 0" [ "$s" -eq 0 ]
+BASE="$(ls "$TMP/cans"/manual-*.tar.gz.canned 2>/dev/null | head -n 1)" || true
+check "seal wrote one can" [ -n "$BASE" ]
+check "the can's name has the right shape" \
+    sh -c 'basename "$1" | grep -qE "^manual-[2-9A-HJKMNP-Z]{4}-[0-9]{8}T[0-9]{6}[+-][0-9]{4}\.tar\.gz\.canned$"' sh "$BASE"
+BASEID="$(basename "$BASE" | cut -d- -f2)"
+check "seal was logged" grep -q "cmd=seal" "$TMP/cans/cinnamon-can.log"
+run s out "$CC" -c "$CONF" list
+check "list: exit 0"            [ "$s" -eq 0 ]
+check "list shows the can"      has "$out" "$BASEID"
+check "list shows the label"    has "$out" "test can"
+run s out "$CC" -c "$CONF" peek "$BASEID"
+check "peek: exit 0"            [ "$s" -eq 0 ]
+check "peek lists the items"    has "$out" "keyboard"
+run s out "$CC" -c "$CONF" peek "$(printf '%s' "$BASEID" | tr '[:upper:]' '[:lower:]')"
+check "an ID may be typed in lower case" [ "$s" -eq 0 ]
+
+
+section "against the live computer (a mid-run settings change can fail these)"
+run s out "$CC" -c "$CONF" diff "$BASEID"
+check "diff right after seal: no differences, exit 0" [ "$s" -eq 0 ]
+run s out "$CC" -c "$CONF" open "$BASEID"
+check "open on a matching can stops by itself"        [ "$s" -eq 0 ]
+check "open says it already matches"                  has "$out" "already matches"
+# A can that differs ONLY in a system file: open must stop and point at
+# the sudo command instead of asking, saving an autocan and restarting.
+U="$TMP/unpack-system"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+if [ -d "$U/items/system/root" ]; then
+    F="$(find "$U/items/system/root" -type f | head -n 1)"
+    echo "# changed by run-tests.sh" >> "$F"
+    sed -i 's/^id[[:space:]]*=.*/id = SYS2/' "$U/manifest.txt"
+    ( cd "$U" && tar -czf "$TMP/cans/manual-SYS2-20300101T000001+0000.tar.gz.canned" . )
+    run s out "$CC" -c "$CONF" open SYS2
+    check "open stops when only system files differ"  [ "$s" -eq 0 ]
+    check "open shows the sudo command for them"      has "$out" "sudo "
+else
+    printf '  skip the can has no system files on this computer\n'
+fi
+
+
+section "a can that differs (crafted, so this works on any computer)"
+U="$TMP/unpack-differs"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+printf '\n[org/cinnamon/sounds]\ncc-test-key=true\n' >> "$U/items/sound/dconf.ini"
+mkdir -p "$U/items/sound/home/.config"
+echo hello > "$U/items/sound/home/.config/cc-test-file.txt"
+sed -i 's/^id[[:space:]]*=.*/id = TES2/' "$U/manifest.txt"
+( cd "$U" && tar -czf "$TMP/cans/manual-TES2-20300101T000000+0000.tar.gz.canned" . )
+run s out "$CC" -c "$CONF" diff "$BASEID" TES2
+check "diff with differences: exit 1"                   [ "$s" -eq 1 ]
+check "a setting only in one can: (default) on -"       has "$out" "-(default)"
+check "... and its real value on +"                     has "$out" "+true"
+check "the new file is shown"                           has "$out" "cc-test-file.txt"
+check "the summary counts them"                         has "$out" "1 setting(s), 1 file(s), 0 system change(s)"
+l1="$(printf '%s\n' "$out" | grep -nF -m1 'cc-test-key'      | cut -d: -f1)" || true
+l2="$(printf '%s\n' "$out" | grep -nF -m1 'cc-test-file.txt' | cut -d: -f1)" || true
+check "inside an item, settings come before files" \
+    test -n "$l1" -a -n "$l2" -a "$l1" -lt "$l2"
+
+
+section "broken cans"
+mkdir -p "$TMP/broken-can"
+printf '# cinnamon-can manifest\n[can]\nid = BRK2\n' > "$TMP/broken-can/manifest.txt"
+( cd "$TMP/broken-can" && tar -czf "$TMP/cans/manual-BRK2-20300101T000002+0000.tar.gz.canned" . )
+run s out "$CC" -c "$CONF" list
+check "list survives a broken manifest: exit 0"  [ "$s" -eq 0 ]
+check "list warns about it"                      has "$out" "broken manifest"
+check "list still shows the good can"            has "$out" "$BASEID"
+run s out "$CC" -c "$CONF" peek BRK2
+check "peek refuses it: exit 1"                  [ "$s" -eq 1 ]
+check "peek says why"                            has "$out" "broken manifest"
+echo "this is not a tar file" > "$TMP/cans/manual-GRB2-20300101T000003+0000.tar.gz.canned"
+run s out "$CC" -c "$CONF" peek GRB2
+check "peek on a damaged file: exit 1"           [ "$s" -eq 1 ]
+check "peek calls it damaged"                    has "$out" "damaged"
+
+
+section "what a can must NOT hold (hardware and personal are off)"
+U="$TMP/unpack-clean"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+check "no screen-tied settings (text or pointer size)" \
+    sh -c 'cd "$1" && ! grep -qE "text-scaling-factor|cursor-size" items/*/dconf.ini' sh "$U"
+check "no update/install history of this machine" \
+    sh -c 'cd "$1" && ! grep -qE "install-last-run|refresh-last-run|installed-apps" items/*/dconf.ini' sh "$U"
+check "no never-kept settings (connect-id ...)" \
+    sh -c 'cd "$1" && ! grep -qE "^(connect-id|night-light-last-coordinates|scaling-factor)=" items/*/dconf.ini' sh "$U"
+check "no personal or per-machine files" \
+    sh -c '! find "$1/items" -path "*enchant*" -o -name "monitors.xml" -o -path "*Templates*" | grep -q .' sh "$U"
+
+
+section "which item owns what (does not depend on this computer)"
+# Load the item files with the program's own code, then push a MADE-UP
+# settings dump and file list through the two sorters.
+CC_ROOT="$ROOT"
+source "$ROOT/lib/common.sh"
+source "$ROOT/lib/items.sh"
+load_items "$ROOT/items" ""
+write_dconf_patterns "$TMP/pat-dconf.txt"
+write_file_patterns  "$TMP/pat-files.txt"
+cat > "$TMP/fake-dump.txt" <<'EOF'
+[org/cinnamon/desktop/interface]
+gtk-theme='Mint-Y'
+text-scaling-factor=1.25
+cursor-size=48
+[org/cinnamon/desktop/keybindings/wm]
+close=['<Super>q']
+[com/linuxmint/updates]
+install-last-run=12345
+[org/x/warpinator/preferences]
+connect-id='SOME-ID'
+[org/gnome/terminal/legacy]
+theme-variant='dark'
+EOF
+flat="$(awk -f "$ROOT/lib/dconf.awk" -v flat=1 "$TMP/pat-dconf.txt" "$TMP/fake-dump.txt")"
+check "the theme belongs to appearance"        has "$flat" "appearance$TAB/org/cinnamon/desktop/interface/gtk-theme"
+check "text size belongs to hardware"          has "$flat" "hardware$TAB/org/cinnamon/desktop/interface/text-scaling-factor"
+check "pointer size belongs to hardware"       has "$flat" "hardware$TAB/org/cinnamon/desktop/interface/cursor-size"
+check "shortcuts belong to keyboard"           has "$flat" "keyboard$TAB/org/cinnamon/desktop/keybindings/wm/close"
+check "unknown app settings fall to app-settings" has "$flat" "app-settings$TAB/org/gnome/terminal/legacy/theme-variant"
+check "machine history is excluded"            hasnt "$flat" "install-last-run"
+check "never-kept settings are dropped"        hasnt "$flat" "connect-id"
+printf '%s\n' \
+    "$HOME/.config/gtk-3.0/bookmarks" \
+    "$HOME/.config/gtk-3.0/settings.ini" \
+    "$HOME/.config/enchant/en.dic" \
+    "$HOME/.config/autostart/nvidia-prime.desktop" \
+    "$HOME/.config/autostart/something-else.desktop" \
+    "$HOME/.config/monitors.xml" > "$TMP/fake-files.txt"
+own="$(awk -f "$ROOT/lib/files.awk" "$TMP/pat-files.txt" "$TMP/fake-files.txt")"
+check "bookmarks belong to nemo, not appearance"  has "$own" "nemo$TAB$HOME/.config/gtk-3.0/bookmarks"
+check "gtk settings belong to appearance"         has "$own" "appearance$TAB$HOME/.config/gtk-3.0/settings.ini"
+check "dictionary words belong to personal"       has "$own" "personal$TAB$HOME/.config/enchant/en.dic"
+check "nvidia autostart belongs to hardware"      has "$own" "hardware$TAB$HOME/.config/autostart/nvidia-prime.desktop"
+check "other autostart belongs to default-apps"   has "$own" "default-apps$TAB$HOME/.config/autostart/something-else.desktop"
+check "monitor layout belongs to hardware"        has "$own" "hardware$TAB$HOME/.config/monitors.xml"
+
+
+printf '\n%d test(s), %d failed\n' "$TESTS" "$FAILS"
+[ "$FAILS" -eq 0 ]

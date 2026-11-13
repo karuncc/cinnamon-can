@@ -1,0 +1,5 @@
+# Software: a list of the apps you installed yourself. It is only a list:
+# cinnamon-can never installs anything, it shows you what is missing.
+description = List of apps you installed (apt, Flatpak, /usr/local/bin, sources)
+default     = on
+special     = software

@@ -1,0 +1,14 @@
+# Optional. Only useful between two computers of the same model.
+# Text size and pointer size belong to the screen, not to the look: on a
+# screen with a different resolution they would come out wrong. Naming
+# them here takes them away from "appearance" (the longest path wins).
+description = Monitor layout, text and pointer size, colour profiles (same model only)
+default     = off
+dconf       = /org/cinnamon/device-aliases
+              /org/cinnamon/desktop/interface/text-scaling-factor
+              /org/gnome/desktop/interface/text-scaling-factor
+              /org/cinnamon/desktop/interface/cursor-size
+              /org/gnome/desktop/interface/cursor-size
+files       = ~/.config/monitors.xml  ~/.config/cinnamon-monitors.xml
+              ~/.local/share/icc/
+              ~/.config/autostart/nvidia-prime.desktop

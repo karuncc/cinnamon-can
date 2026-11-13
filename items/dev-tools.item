@@ -1,0 +1,7 @@
+# Optional. Settings of common developer tools.
+description = Git, vim, nano and VS Code settings
+default     = off
+files       = ~/.gitconfig  ~/.vimrc  ~/.nanorc
+              ~/.config/Code/User/settings.json
+              ~/.config/Code/User/keybindings.json
+              ~/.config/Code/User/snippets/

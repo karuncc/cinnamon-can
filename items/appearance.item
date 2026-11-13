@@ -1,0 +1,21 @@
+# Appearance: how the desktop and the apps look.
+description = Themes, icons, pointer, fonts and font rendering, wallpaper
+default     = on
+dconf       = /org/cinnamon/desktop/interface/
+              /org/gnome/desktop/interface/
+              /org/cinnamon/theme/
+              /org/cinnamon/desktop/background/
+              /org/cinnamon/settings-daemon/plugins/xsettings/
+              /org/gnome/settings-daemon/plugins/xsettings/
+              /org/cinnamon/desktop/wm/preferences/titlebar-font
+              /org/gnome/desktop/wm/preferences/titlebar-font
+              /org/gnome/desktop/wm/preferences/titlebar-uses-system-font
+              /org/gnome/desktop/wm/preferences/theme
+              /org/x/apps/portal/
+files       = ~/.themes/  ~/.icons/
+              ~/.local/share/themes/  ~/.local/share/icons/
+              ~/.fonts/  ~/.local/share/fonts/  ~/.config/fontconfig/
+              ~/.config/gtk-3.0/  ~/.config/gtk-4.0/  ~/.gtkrc-2.0
+              ~/.config/cinnamon/backgrounds/
+              ~/.local/share/backgrounds/cinnamon-can/
+special     = wallpaper

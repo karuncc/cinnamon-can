@@ -1,0 +1,12 @@
+# Default apps: which app opens what, and what starts with the desktop.
+description = Preferred applications, terminal, startup applications, user folders
+default     = on
+dconf       = /org/cinnamon/desktop/applications/
+              /org/gnome/desktop/applications/
+              /org/cinnamon/desktop/media-handling/
+files       = ~/.config/mimeapps.list
+              ~/.config/xdg-terminals.list
+              ~/.config/X-Cinnamon-xdg-terminals.list
+              ~/.config/user-dirs.dirs
+              ~/.config/user-dirs.locale
+              ~/.config/autostart/

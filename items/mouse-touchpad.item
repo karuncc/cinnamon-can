@@ -1,0 +1,8 @@
+# Mouse and touchpad: how pointing feels.
+description = Double-click speed, pointer speed, scrolling, touchpad, gestures
+default     = on
+dconf       = /org/cinnamon/desktop/peripherals/mouse/
+              /org/cinnamon/desktop/peripherals/touchpad/
+              /org/gnome/desktop/peripherals/mouse/
+              /org/gnome/desktop/peripherals/touchpad/
+              /org/cinnamon/gestures/

@@ -1,0 +1,9 @@
+# Windows: how windows and workspaces behave.
+description = Window behaviour, title bar buttons, workspaces, Alt-Tab, tiling, effects
+default     = on
+dconf       = /org/cinnamon/desktop/wm/preferences/
+              /org/gnome/desktop/wm/preferences/
+              /org/cinnamon/muffin/
+              /org/cinnamon/alttab-*
+              /org/cinnamon/window-effect-speed
+              /org/cinnamon/desktop-effects*

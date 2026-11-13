@@ -1,0 +1,8 @@
+# System: settings of the whole computer. They are kept like everything
+# else, but they are only put back by "sudo cinnamon-can open CAN".
+description = Login screen, system language and keyboard, time zone (restored with sudo)
+default     = on
+system      = /etc/lightdm/slick-greeter.conf
+              /etc/default/locale
+              /etc/default/keyboard
+special     = timezone

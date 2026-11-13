@@ -1,0 +1,6 @@
+# Optional. The terminal: your bash files, scripts and crontab.
+description = Terminal: bash files, your scripts, user services, crontab
+default     = off
+files       = ~/.bashrc  ~/.bash_aliases  ~/.bash_profile  ~/.profile  ~/.inputrc
+              ~/.local/bin/  ~/.config/systemd/user/  ~/.config/environment.d/
+special     = crontab

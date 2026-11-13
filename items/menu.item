@@ -1,0 +1,7 @@
+# Menu: how the main menu is arranged.
+description = Menu layout, favourites, your own launchers
+default     = on
+dconf       = /org/cinnamon/favorite-apps
+files       = ~/.config/menus/
+              ~/.local/share/applications/
+              ~/.local/share/desktop-directories/

@@ -1,0 +1,14 @@
+# Panel: the panels, what is on them and in which order.
+description = Panels, applets and their settings, desklets, extensions, hot corners
+default     = on
+dconf       = /org/cinnamon/panel*
+              /org/cinnamon/enabled-applets
+              /org/cinnamon/enabled-desklets
+              /org/cinnamon/enabled-extensions
+              /org/cinnamon/enabled-search-providers
+              /org/cinnamon/next-applet-id
+              /org/cinnamon/next-desklet-id
+              /org/cinnamon/desklet-*
+              /org/cinnamon/hotcorner-layout
+files       = ~/.config/cinnamon/spices/
+              ~/.local/share/cinnamon/

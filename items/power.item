@@ -1,0 +1,6 @@
+# Power: what happens when idle, on lid close, and the lock screen.
+description = Power management, screen blanking, lock screen
+default     = on
+dconf       = /org/cinnamon/settings-daemon/plugins/power/
+              /org/cinnamon/desktop/screensaver/
+              /org/cinnamon/desktop/session/
