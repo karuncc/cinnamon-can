@@ -187,6 +187,101 @@ run s out "$CC" -c "$CONF" diff "$BASEID" VER2
 check "two cans of different versions: the warning"  has "$out" "The two cans were made on different versions:"
 check "... naming both cans"                         has "$out" "Cinnamon $(sed -n 's/^cinnamon_version *= *//p' "$TMP/unpack-differs/manifest.txt") in can [$BASEID], 0.0.1 in can [VER2]"
 
+# Two cans that hold the same setting under different items (one moved it
+# into its own user item): both sides are split by the "+" can's items,
+# so nothing differs, in both directions.
+U="$TMP/unpack-useritem"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+SRC=""
+for n in other app-settings; do [ -s "$U/items/$n/dconf.ini" ] && { SRC="$n"; break; }; done
+if [ -n "$SRC" ]; then
+    # The first setting of that item: its folder, and its line.
+    SEC="$(awk '/^\[.*\]$/ { s = $0; next } /=/ { print s; exit }' "$U/items/$SRC/dconf.ini")"
+    KEYLINE="$(awk '/^\[.*\]$/ { next } /=/ { print; exit }' "$U/items/$SRC/dconf.ini")"
+    KEY="${KEYLINE%%=*}"; FOLDER="${SEC#[}"; FOLDER="${FOLDER%]}"
+    awk -v l="$KEYLINE" '$0 != l || done { print; next } { done = 1 }' "$U/items/$SRC/dconf.ini" > "$U/x.ini"
+    mv "$U/x.ini" "$U/items/$SRC/dconf.ini"
+    mkdir -p "$U/items/cc-own"
+    printf '%s\n%s\n' "$SEC" "$KEYLINE" > "$U/items/cc-own/dconf.ini"
+    printf 'description = test\ndefault = on\ndconf = /%s/%s\n' "$FOLDER" "$KEY" > "$U/catalog/user/cc-own.item"
+    sed -i 's/^id[[:space:]]*=.*/id = USR2/' "$U/manifest.txt"
+    ( cd "$U" && tar -czf "$TMP/cans/manual-USR2-20300101T000008+0000.tar.gz.canned" . )
+    run s out "$CC" -c "$CONF" diff "$BASEID" USR2
+    check "same setting, another item in the + can: no differences" [ "$s" -eq 0 ]
+    run s out "$CC" -c "$CONF" diff USR2 "$BASEID"
+    check "... and the other way round"                  [ "$s" -eq 0 ]
+    check "... without the item the + can does not know" hasnt "$out" "cc-own"
+else
+    printf '  skip the can has no settings in other or app-settings\n'
+fi
+
+# pack DIR ID NN -> the unpacked can in DIR becomes a can with that ID
+#   (NN: two digits that make its file name differ from the others).
+pack() {
+    sed -i "s/^id[[:space:]]*=.*/id = $2/" "$1/manifest.txt"
+    ( cd "$1" && tar -czf "$TMP/cans/manual-$2-20300101T0000$3+0000.tar.gz.canned" . )
+}
+
+# The same for a file: the "+" can keeps one home file in its own item.
+U="$TMP/unpack-ownfile"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+F="$(find "$U/items" -path '*/home/*' -type f | head -n 1)"
+if [ -n "$F" ]; then
+    REL="${F#"$U"/items/*/home/}"
+    mkdir -p "$(dirname "$U/items/cc-own/home/$REL")"
+    mv "$F" "$U/items/cc-own/home/$REL"
+    printf 'description = test\ndefault = on\nfiles = "~/%s"\n' "$REL" > "$U/catalog/user/cc-own.item"
+    pack "$U" OWF2 10
+    run s out "$CC" -c "$CONF" diff "$BASEID" OWF2
+    check "same file, another item in the + can: no differences" [ "$s" -eq 0 ]
+    run s out "$CC" -c "$CONF" diff OWF2 "$BASEID"
+    check "... and the other way round"                  [ "$s" -eq 0 ]
+else
+    printf '  skip the can has no home file to move\n'
+fi
+
+# What two items take at once (the language, a system file): "seal" gives
+# each of them a copy. Two such cans that hold the same must not differ:
+# here the language is kept by an own item INSTEAD of the built-in one,
+# and a system file by an own item AS WELL AS the built-in one.
+U="$TMP/unpack-twice"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+if [ -f "$U/items/language/language.txt" ]; then
+    mkdir -p "$U/items/cc-also"
+    mv "$U/items/language/language.txt" "$U/items/cc-also/"
+    rm -rf "$U/items/language"
+    printf 'description = test\ndefault = on\nspecial = language\n' > "$U/catalog/user/cc-also.item"
+    F="$(find "$U/items/system/root" -type f 2>/dev/null | head -n 1)" || true
+    if [ -n "$F" ]; then
+        REL="${F#"$U/items/system/root"}"
+        mkdir -p "$(dirname "$U/items/cc-also/root$REL")"
+        cp -p "$F" "$U/items/cc-also/root$REL"
+        printf 'system = %s\n' "$REL" >> "$U/catalog/user/cc-also.item"
+    fi
+    pack "$U" TWA2 11
+    pack "$U" TWB2 12
+    run s out "$CC" -c "$CONF" diff TWA2 TWB2
+    check "what two items take at once: no differences"  [ "$s" -eq 0 ]
+else
+    printf '  skip the can has no language\n'
+fi
+
+# The "-" can has files in an item the "+" can does not know: they cannot
+# be compared, and a warning says so. The other way round they are new
+# files -- one of them a link that points nowhere on this computer.
+U="$TMP/unpack-leftout"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+mkdir -p "$U/items/cc-extra/home/.config/cc test"
+echo hello > "$U/items/cc-extra/home/.config/cc test/a b.conf"
+ln -s /cc-no-such-folder/file "$U/items/cc-extra/home/.config/cc test/link"
+printf 'description = test\ndefault = on\nfiles = "~/.config/cc test/"\n' > "$U/catalog/user/cc-extra.item"
+pack "$U" LFT2 13
+run s out "$CC" -c "$CONF" diff LFT2 "$BASEID"
+check "files no item of the + can takes: a warning"  has "$out" "   WARN  Not compared: 2 file(s) in can [LFT2] that no item of can [$BASEID] takes:"
+check "... with the item they were in"               has "$out" "         └ cc-extra: 2 file(s)"
+check "... and the command that shows them"          has "$out" "       \$ cinnamon-can diff $BASEID LFT2"
+run s out "$CC" -c "$CONF" diff "$BASEID" LFT2
+check "the other way round they are new files"       has "$out" "     NEW └ • ~/.config/cc test/a b.conf  (+1 | -0)"
+check "a link that points nowhere: no line count"    sh -c 'printf "%s\n" "$1" | grep -qxF "     NEW └ • ~/.config/cc test/link"' sh "$out"
+check "... and no error from the shell"              sh -c '! printf "%s" "$1" | grep -qE "No such file|expression expected"' sh "$out"
+check "... and no warning, all could be compared"    hasnt "$out" "Not compared"
+
 # A can that uses a theme and a package this computer does not have: each
 # is listed with the item that uses it.
 U="$TMP/unpack-missing"; mkdir "$U"; tar -C "$U" -xzf "$BASE"

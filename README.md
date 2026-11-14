@@ -185,6 +185,11 @@ How to read it:
   different Cinnamon versions.
 - Optional items and your own items come last, marked `(optional item)`
   or `(your own item)`.
+- Two cans are compared item by item as the `+` can sorts things, so a
+  setting or file that one can keeps in an item of your own and the other
+  in a built-in item is not shown twice. A file of the `-` can that no
+  item of the `+` can takes cannot be compared: a warning on top says how
+  many there are, and how to see them.
 - `[SUDO REQUIRED]` marks system files and the time zone: they are only
   put back with sudo (below).
 - What programs write by themselves (where a window was, a time stamp) is
