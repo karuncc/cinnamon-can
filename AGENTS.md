@@ -46,13 +46,16 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
 ```
 cinnamon-can          command line, sudo hand-over, dispatch to lib/
 items/*.item          built-in items (one file per item)
-lib/common.sh         messages, temp folder, INI reading, config,
-                      system facts, can IDs and lookup, log, utilities
-lib/items.sh          reads item files, item_on, patterns for the awk files
+lib/common.sh         screen layout and messages, temp folder, INI
+                      reading, config, system facts, can IDs and lookup,
+                      log, utilities
+lib/items.sh          reads item files, item_on, patterns for the awk
+                      files, the ignore rules
 lib/dconf.awk         sorts dconf settings into items (longest path wins)
 lib/files.awk         sorts home files into items (longest path wins)
 lib/collect.sh        reads this computer into a tree (shared by all)
-lib/refs.sh           finds what a can needs that this computer lacks
+lib/refs.sh           finds what a can uses that is not installed here,
+                      and which item uses it
 lib/list.sh           list, peek, reading cans and manifests
 lib/diff.sh           views, comparison, the diff report
 lib/seal.sh           seal, package_can
@@ -96,6 +99,27 @@ LICENSE               MIT
 - Ownership: the longest matching path of ALL items (also switched-off
   ones) wins, user items win ties; catch-alls `other` and `app-settings`.
   `diff` and `open` always split both sides with the **can's** catalog.
+
+## Screen output
+
+Every command prints in the same layout (helpers in `lib/common.sh`):
+
+- Two columns: a 9-character left column for a status badge (`info`,
+  `ok`, `warn`, `err`) or a mark, and the right column for everything
+  else (`say`). Without a terminal the badges are the same words in the
+  same places, without colour.
+- A line that belongs to the line above starts with a grey `└` (`SUB`,
+  `SUB2`); a file name with lines under it gets a yellow `•`
+  (`file_dot`). A table is a message, a grey heading row (`table_head`)
+  and rows that start with `└` (`ROW`).
+- A command for the user to type is a message line that starts with
+  `$ `: it gets a grey `$` in the left column and can be copied as it is.
+  Can IDs go through `show_id` (grey block, or `[ID]`), but never inside
+  such a command.
+- Sentences start with a capital letter, labels the program writes too.
+- `warn` and `err` go to stderr; a warning that is part of a report
+  (`diff`, `peek`, `list`) uses `msg_lines "$B_WARN"` on stdout, so it
+  stays in its place on the page.
 
 ## Testing
 

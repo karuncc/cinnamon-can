@@ -4,7 +4,7 @@ Keep your **Linux Mint Cinnamon** desktop in cans, and open a can to get it
 back — on this computer or on a new one.
 
 ```
-cinnamon-can seal -L "before upgrade"   # put the current desktop in a new can
+cinnamon-can seal -L "Before upgrade"   # put the current desktop in a new can
 cinnamon-can list                       # all cans, with their IDs
 cinnamon-can peek K7Q2                  # what is inside can K7Q2
 cinnamon-can diff K7Q2                  # what would change
@@ -77,12 +77,12 @@ backup folder `~/cinnamon-cans` only if you no longer need your cans.
 
 ```
 cinnamon-can seal
-cinnamon-can seal -L "fresh setup"       # or --label="fresh setup"
+cinnamon-can seal -L "Fresh setup"       # or --label="Fresh setup"
 ```
 
 Prints the can's **ID** (four characters, e.g. `K7Q2`), what each item
-holds, and what this computer itself is missing (for example an app that is
-pinned to the panel but no longer installed).
+holds, and what the can uses that this computer has not installed (for
+example an app that is pinned to the panel but no longer installed).
 
 ### Find a can
 
@@ -91,16 +91,19 @@ cinnamon-can list
 ```
 
 ```
-ID    KIND    CREATED           HOST       MINT / CINN.      SIZE  LABEL
-R4T8  autocan 2026-11-13 15:05  mylaptop   22.3 / 6.6.9    402 KB  before opening K7Q2
-K7Q2  manual  2026-11-13 14:30  mylaptop   22.3 / 6.6.9    410 KB  before upgrade
+   INFO  Cans stored in ~/cinnamon-cans:
+           ID     KIND    CREATED DESC     HOST         MINT / CINN.       SIZE LABEL
+         └ [R4T8] autocan 2026-11-13 15:05 mylaptop     22.3 / 6.6.9   402.1 KB Before opening K7Q2
+         └ [K7Q2] manual  2026-11-13 14:30 mylaptop     22.3 / 6.6.9   410.4 KB Before upgrade
 
-Latest applied on this computer: K7Q2  (2026-11-13T15:05, system files restored)
+   INFO  Latest applied on this computer: can [K7Q2]
+         └ 2026-11-13T15:05, system files restored
 ```
 
 `manual` cans are the ones you made. An `autocan` is made by `open` just
-before it changes anything — it is your undo. IDs can be typed in lower
-case. Wherever a command takes a CAN you may also give the path of a can file.
+before it changes anything — it is your undo. The newest can comes first
+(`CREATED DESC`). IDs can be typed in lower case. Wherever a command takes
+a CAN you may also give the path of a can file.
 
 ### Look inside a can
 
@@ -108,8 +111,10 @@ case. Wherever a command takes a CAN you may also give the path of a can file.
 cinnamon-can peek K7Q2
 ```
 
-Shows the computer and versions it came from, every item, the list of
-software you had installed, and what this computer is missing.
+Shows when and on which computer and versions the can was made, every
+item, the list of software you had installed (in a terminal, what is not
+installed here is yellow), and what the can uses that this computer has
+not installed.
 
 ### Compare
 
@@ -119,46 +124,78 @@ cinnamon-can diff K7Q2 R4T8     # can K7Q2 (-) against can R4T8 (+)
 ```
 
 ```
-Comparing - this computer with + can K7Q2 "before upgrade"
+   INFO  Reading this computer's settings ...
+   INFO  Comparing:
+         (-) This computer
+         (+) Can [K7Q2] (label: Before upgrade)
 
-== keyboard
---- /org/cinnamon/desktop/keybindings/wm/close
--['<Alt>F4']
-+['<Super>q']
---- /org/cinnamon/desktop/peripherals/keyboard/repeat-interval
--uint32 30
-+(default)
---- ~/.config/fcitx/profile
-@@ -3 +3 @@
--IMName=
-+IMName=thai
+         keyboard
+         └ /org/cinnamon/desktop/keybindings/wm/close
+      -    ['<Alt>F4']
+      +    ['<Super>q']
+         └ /org/cinnamon/desktop/peripherals/keyboard/repeat-interval
+      -    uint32 30
+      +    (default)
 
-== system
---- /etc/default/locale  [sudo]
-...
+         panel
+         └ • ~/.config/cinnamon/spices/calendar@cinnamon.org/13.json  (+1 | -1)
+           10          "tooltip": "Check this to display events in the calendar.",
+      -    11          "value": true
+      +    11          "value": false
+           12      },
+     NEW └ • ~/.config/cinnamon/spices/calendar@cinnamon.org/99.json  (+3 | -0)
 
-== Missing on this computer
-  font      Waree                          font-name
-  apt       code                           not installed
+         system
+         └ • /etc/default/locale [SUDO REQUIRED]  (+1 | -1)
+      -     1  LANG=en_US.UTF-8
+      +     1  LANG=th_TH.UTF-8
 
-  To install what is missing (check the list first):
-    sudo apt install code
+         hardware (optional item)
+         └ /org/cinnamon/desktop/interface/text-scaling-factor
+      -    1.0
+      +    1.25
 
-Summary: 2 setting(s), 1 file(s), 1 system file(s) differ; 2 thing(s) missing
+   WARN  Used by the can, but not installed on this computer:
+           TYPE      NAME                                 USED BY ITEM
+         └ apt       code                                 software
+         └ apt       gimp                                 software
+
+         To install the missing software, check the list above, then run:
+       $ sudo apt install code gimp
+
+   INFO  Summary of the comparison above:
+         └ ● 3 setting(s) differ
+         └ ● 2 file(s) differ
+         └ ● 1 system change(s) differ (only with sudo)
+         └ ● 2 thing(s) used by the can but not installed here (listed above)
 ```
 
 How to read it:
-- `-` is this computer (or the first can), `+` is the can that would be opened.
+- `(-)` is this computer (or the first can), `(+)` is the can that would
+  be opened. Every changed line starts with `-` or `+` on the left (a red
+  or green block in a terminal).
+- Each item is a heading. Under it, `└ /...` is a setting and `└ • ~/...`
+  a file, with `(+N | -N)`: how many lines the can adds and removes. The
+  grey numbers are line numbers in the file.
 - `(default)` means the setting is at Cinnamon's default on that side.
-- `(new file)` / `(deleted)`: files only one side has. This is normal — for
-  example a theme you installed, or an applet only one panel has.
+- `NEW` / `DEL`: files only one side has. This is normal — for example a
+  theme you installed, or an applet only one panel has.
 - Changed **values** are normal. A changed **shape** (a setting name or a
   file's structure that looks different) usually means the two sides run
   different Cinnamon versions.
-- Optional items and your own items are shown in a separate **Extra** part.
-- `[sudo]` marks system files: they are only put back with sudo (below).
+- Optional items and your own items come last, marked `(optional item)`
+  or `(your own item)`.
+- `[SUDO REQUIRED]` marks system files and the time zone: they are only
+  put back with sudo (below).
+- What programs write by themselves (where a window was, a time stamp) is
+  not shown: built-in items `ignore` it, and you can add more (see "Your
+  own items").
+- "Used by the can, but not installed on this computer" lists the themes,
+  fonts, apps and packages the can names but this computer lacks, with the
+  item that uses each one. They are never installed for you.
 
-Set `PAGER` if you prefer another pager than `less`.
+`diff`, `open` and `list` show long output page by page with `less`; set
+`PAGER` to use another program.
 
 ### Open a can
 
@@ -172,7 +209,7 @@ cinnamon-can open K7Q2
 3. Saves the current state as an `autocan` (your undo).
 4. Makes this computer match the can: files first, then settings, your
    language, and asks the input method (fcitx) to reload. Files the can does
-   not have are removed (they were shown as `(deleted)`). The old home folder
+   not have are removed (they were shown as `DEL`). The old home folder
    (`/home/olduser/...`) is replaced by yours everywhere. A wallpaper image
    this computer does not have is copied to
    `~/.local/share/backgrounds/cinnamon-can/`.
@@ -227,7 +264,8 @@ Every part is an **item**: one small file in `items/` saying what it keeps.
 **Never kept:** Warpinator's computer ID, the night-light location, the
 screen scaling factor, and private histories: what you typed into the
 Run dialog (Alt+F2) and Looking Glass, what you searched for in Text
-Editor and in Passwords and Keys, the Bluetooth devices you connected to.
+Editor and in Passwords and Keys, the Bluetooth devices you connected to,
+and the PGP key you last signed with.
 
 Switch items on or off in `config/default.conf`:
 
@@ -286,10 +324,10 @@ built-in file is a good start).
 
 1. Update both computers until they run the same Mint release and the same
    Cinnamon version (`cinnamon --version`).
-2. Old computer: `cinnamon-can seal -L "move"`, then copy the can (from
+2. Old computer: `cinnamon-can seal -L "Move"`, then copy the can (from
    `~/cinnamon-cans/`) to the new computer's `~/cinnamon-cans/`.
 3. New computer: get cinnamon-can, create the config, then
-   `cinnamon-can peek ID` and install what it lists as missing (apps,
+   `cinnamon-can peek ID` and install what it lists as not installed (apps,
    fonts, themes) — their settings then apply right away.
 4. `cinnamon-can diff ID`, then `cinnamon-can open ID` — with sudo and the
    full path (see "Open a can") to include the system files. The computer
