@@ -69,11 +69,22 @@ LICENSE               MIT
 
 - **Item file** `NAME.item` (no sections): `description`, `default`
   (on|off), `dconf`, `files`, `exclude`, `system`, `special`
-  (wallpaper|language|timezone|software|crontab) and `ignore`
-  (`~/file:start-of-line` pairs: such lines do not count when comparing,
-  but the file is still restored whole). Indented lines continue a value;
-  `  #` starts a comment. User items live in `items/` next to the config
-  and may not reuse a built-in name.
+  (wallpaper|language|timezone|software|crontab) and `ignore` (settings
+  as in `dconf`, plus `*/name`, `*/name*`, `*/*name` for a setting name in
+  any folder of the item, and `~/file:start-of-line` for lines in a file:
+  kept and restored with the item, but never counted when comparing).
+  Indented lines continue a value; `  #` starts a comment. User items
+  live in `items/` next to the config and may not reuse a built-in name.
+- **Noise** (what a program or the system writes by itself: window
+  places, versions, history, time stamps) goes into the `ignore` of the
+  item that takes it; the catch-alls `other` and `app-settings` carry the
+  common naming patterns. What is private or only means something on this
+  computer (a command history, a computer ID) is not noise: `exclude` it
+  (or, across all items, `NEVER_KEEP_DCONF` in `lib/items.sh`). `diff`
+  and `open` use the `ignore` of the can's items AND of this computer's
+  items of the same name, so a new line also quiets older cans. What may
+  go into a built-in `ignore`: "Ignore lines in built-in items" in
+  `CONTRIBUTING.md`.
 - **Config** `config/default.conf`: `[general] backup_dir`, `[items] name =
   yes|no`. Required; created from `config/example.conf`.
 - **Can** `{manual|autocan}-ID-YYYYMMDDTHHMMSS±HHMM.tar.gz.canned`, ID = 4
@@ -100,6 +111,15 @@ LICENSE               MIT
   the LIVE computer and can fail when a setting changes mid-run — run the
   script again before hunting for a bug. New behaviour should come with a
   new check in this script.
+- The script cannot find noise: it seals and compares within seconds,
+  before anything has had time to change by itself. Before a release, also
+  check over time: `seal`, use the computer normally for a day (move and
+  resize windows, switch the input language, open the usual apps), then
+  `diff` that can. Every line the owner did not change is noise (see
+  Formats). `dconf dump` only shows settings that were written at least
+  once, so also look through the schemas of the installed apps
+  (`/usr/share/glib-2.0/schemas/`) for window sizes, "last", "recent" and
+  "history".
 - NOT covered by the script: really applying a can (`open` + `yes`),
   sudo, language, system files and the restart. For those, the rules
   below apply.

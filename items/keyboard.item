@@ -16,3 +16,10 @@ dconf       = /org/cinnamon/desktop/keybindings/
 files       = ~/.xinputrc
               ~/.config/fcitx/config  ~/.config/fcitx/profile  ~/.config/fcitx/conf/
               ~/.config/fcitx5/config ~/.config/fcitx5/profile ~/.config/fcitx5/conf/
+# Written by the programs themselves: where the layout preview window and
+# the ibus panel were, which ibus version ran last, and which input method
+# fcitx had on last (Thai, English ...).
+ignore      = /org/gnome/libgnomekbd/preview/
+              /desktop/ibus/panel/x  /desktop/ibus/panel/y
+              /desktop/ibus/general/version
+              ~/.config/fcitx/profile:IMName=

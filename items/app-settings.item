@@ -3,8 +3,52 @@
 description = Settings apps keep in the settings database (Text Editor, Terminal ...)
 default     = on
 dconf       = /
-# These lines record what THIS computer did (when it last checked for
-# updates, what its installer put on), not settings you chose.
+# Never kept. What THIS computer did (when it last checked for updates,
+# what its installer put on), and what is private: Bluetooth devices you
+# connected to, what you searched for in Text Editor and in Passwords and
+# Keys, the key you last signed with.
 exclude     = /com/linuxmint/updates/install-last-run
               /com/linuxmint/updates/refresh-last-run
               /com/linuxmint/install/installed-apps
+              /org/blueman/plugins/recentconns/recent-connections
+              /org/x/editor/state/history-entry/
+              /apps/seahorse/last-search-text
+              /desktop/gnome/crypto/pgp/last-signer
+# Written by the apps themselves, so they never count as a change: where
+# and how big a window was and where its dividers sat, what was used last,
+# histories, and which version last ran or moved its data. The names
+# first are the ones apps use for these by habit; the paths after them
+# are apps that use other names. ("last-..." is not a name pattern here:
+# some apps use it for a choice, like "last-folder-enable".)
+ignore      = */window-size  */window-width  */window-height  */window-position
+              */window-maximized  */window-properties  */window-pane-position
+              */window-ratio  */maximized  */is-maximized  */*paned-position
+              */*-history  */migrated*  */schema-version
+              /org/x/editor/state/
+              /org/x/warpinator/window-state/
+              /org/x/thingy/width  /org/x/thingy/height
+              /org/gnome/rhythmbox/size  /org/gnome/rhythmbox/position
+              /org/gnome/rhythmbox/display-page-tree-height
+              /org/gnome/evolution-data-server/calendar/notify-window-x
+              /org/gnome/evolution-data-server/calendar/notify-window-y
+              /org/gnome/evolution-data-server/calendar/notify-window-width
+              /org/gnome/evolution-data-server/calendar/notify-window-height
+              /org/gnome/file-roller/dialogs/last-output/
+              /org/x/pix/data-migration/
+              /org/gnome/power-manager/info-last-device
+              /org/gnome/nautilus/window-state/initial-size
+              /apps/seahorse/last-search-servers
+              /com/linuxmint/mintmenu/plugins/applications/last-active-tab
+              /org/blueman/general/last-adapter
+              /org/gnome/gnome-screenshot/last-save-directory
+              /org/x/pix/catalogs/last-catalog  /org/x/pix/file-manager/last-folder
+              /org/x/sticky/last-color
+              /org/gnome/charmap/last-char  /org/gnome/charmap/window-state/size
+              /io/github/celluloid-player/celluloid/window-state/width
+              /io/github/celluloid-player/celluloid/window-state/height
+              /io/github/celluloid-player/celluloid/window-state/last-folder-uri
+              /io/github/celluloid-player/celluloid/window-state/playlist-width
+              /io/github/gnome-mpv/window-state/width
+              /io/github/gnome-mpv/window-state/height
+              /io/github/gnome-mpv/window-state/last-folder-uri
+              /io/github/gnome-mpv/window-state/playlist-width

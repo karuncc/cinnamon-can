@@ -4,3 +4,8 @@ default     = on
 dconf       = /org/nemo/
 files       = ~/.config/gtk-3.0/bookmarks
               ~/.local/share/nemo/
+# Nemo writes these by itself: where its window was and how big, and how
+# you last connected to a server.
+ignore      = /org/nemo/window-state/geometry
+              /org/nemo/window-state/maximized
+              /org/nemo/preferences/last-server-connect-method

@@ -9,12 +9,18 @@
 #   exclude     = ~/.config/fcitx/conf/fcitx-clipboard.config
 #   system      = /etc/default/locale                     (needs sudo)
 #   special     = wallpaper | language | timezone | software | crontab
-#   ignore      = ~/.config/nemo/desktop-metadata:nemo-icon-view-layout-timestamp=
+#   ignore      = /org/nemo/window-state/geometry  */window-size
+#                 ~/.config/nemo/desktop-metadata:nemo-icon-view-layout-timestamp=
 #
-# "ignore" names lines that programs rewrite by themselves (times, window
-# sizes ...): FILE:BEGINNING. When two copies of FILE are compared, lines
-# that start with BEGINNING do not count. The file itself is still kept
-# and restored whole.
+# "ignore" names what the programs write by themselves (where a window
+# was, which version ran last, a time stamp ...): settings, or lines in a
+# file written FILE:BEGINNING. They are still kept and restored with the
+# rest of the item, but they do not count when two copies are compared,
+# so they never show up as a difference on their own.
+#
+# "exclude" is different: what it names is not kept at all. Use it for
+# what is private or only means something on this computer (a command
+# history, a computer ID).
 #
 # Built-in items live in items/ next to the program. Your own items live
 # in the "items" folder next to your config (config/items/). An item of
@@ -27,6 +33,9 @@
 #   files    ~/x/   = a folder and everything below it,  ~/x = one file
 #            * and ? are wildcards that stay inside one folder level
 #   exclude  "~/..." leaves files out, "/..." leaves settings out
+#   ignore   settings as in dconf, and also a setting NAME in any folder
+#            of the item: */NAME, */NAME* (starts so), */*NAME (ends so);
+#            "~/FILE:BEGINNING" for lines in a file
 #
 # When two items name overlapping paths, the most specific (longest) one
 # wins; your own items win a tie. Settings that no item names fall to the
@@ -120,8 +129,13 @@ load_item_file() {
             *) err "$file: unknown special \"$p\""; bad=1 ;; esac
     done
     while IFS= read -r p; do
-        valid_home_path "${p%%:*}" && [[ "$p" == *:?* ]] \
-            || { err "$file: ignore \"$p\" must look like ~/path/file:beginning-of-line"; bad=1; }
+        if [[ "$p" == "~/"* ]]; then
+            valid_home_path "${p%%:*}" && [[ "$p" == *:?* ]] \
+                || { err "$file: ignore \"$p\" must look like ~/path/file:beginning-of-line"; bad=1; }
+        else
+            valid_ignore_setting "$p" \
+                || { err "$file: ignore \"$p\" is not a setting (/a/b/c, /a/b/, /a/b/c*, */name, */name*, */*name) or a file line (~/file:beginning)"; bad=1; }
+        fi
     done < <(split_words "${ITEM_IGNORE[$name]}")
     [ "$bad" -eq 0 ]
 }
@@ -129,6 +143,19 @@ load_item_file() {
 valid_dconf_path() {
     local p="$1" body="${1%\*}"
     [[ "$p" == /* && "$p" != *//* && "$body" != *\** && "$p" != *'/*' ]]
+}
+
+# valid_ignore_setting P -> a normal settings path, or "*/NAME" where NAME
+#   has no "/" and one "*" at most, at its start or at its end.
+valid_ignore_setting() {
+    local name="${1#\*/}"
+    if [[ "$1" == "*/"* ]]; then
+        [[ "$name" != \*?*\* ]] || return 1          # not at both ends
+        name="${name#\*}"; name="${name%\*}"
+        [ -n "$name" ] && [[ "$name" != */* && "$name" != *\** ]]
+    else
+        valid_dconf_path "$1"
+    fi
 }
 valid_home_path() { [[ "$1" == "~/"?* && "/$1/" != */../* ]]; }
 
@@ -186,6 +213,34 @@ write_dconf_patterns() {
         done < <(split_words "${ITEM_EXCLUDE[$n]}")
     done < <(items_in_order)
     while IFS= read -r p; do printf 'never\t-\t%s\n' "$p" >> "$out"; done <<< "$NEVER_KEEP_DCONF"
+}
+
+# keep_own_ignore -> remembers the "ignore" fields of the items on THIS
+#   computer. A can brings its own items, and an older can's items may not
+#   know about a line added since: comparing uses both (see ignore_words).
+declare -A OWN_IGNORE=()
+keep_own_ignore() {
+    local n
+    OWN_IGNORE=()
+    for n in "${ITEM_NAMES[@]}"; do OWN_IGNORE[$n]="${ITEM_IGNORE[$n]}"; done
+}
+
+# ignore_words ITEM -> every "ignore" entry of ITEM, one per line: from
+#   the item now loaded (the can's) and from this computer's item of the
+#   same name.
+ignore_words() {
+    { split_words "${ITEM_IGNORE[$1]:-}"; split_words "${OWN_IGNORE[$1]:-}"; } | awk 'NF && !seen[$0]++'
+}
+
+# flat_without_ignored INI ITEM -> item<TAB>path<TAB>value for every
+#   setting in INI, leaving out the ones ITEM ignores.
+flat_without_ignored() {
+    local ini="$1" n="$2" pat="$CC_TMP/ignore-patterns.txt" p
+    { printf 'inc\t%s\t/\n' "$n"
+      ignore_words "$n" | while IFS= read -r p; do
+          [[ "$p" == "~/"* ]] || printf 'exc\t%s\t%s\n' "$n" "$p"
+      done; } > "$pat"
+    awk -f "$CC_ROOT/lib/dconf.awk" -v flat=1 "$pat" "$ini"
 }
 
 # write_file_patterns FILE -> "kind<TAB>item<TAB>/full/path" for files.awk.

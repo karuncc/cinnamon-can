@@ -51,6 +51,7 @@ build_comparison() {
     local plus_home="${MAN[can.home]}" plus_label
     plus_label="can ${MAN[can.id]}${MAN[can.label]:+ \"${MAN[can.label]}\"}"
     notes="$(version_notes)"
+    keep_own_ignore     # before the can's items replace this computer's
     load_items "$CC_TMP/can-plus/catalog/builtin" "$CC_TMP/can-plus/catalog/user"
 
     if [ -z "$minus_can" ]; then
@@ -176,12 +177,13 @@ uri_path() {
 # ---------------------------------------------------------------------------
 
 # flat_settings VIEW ITEM... -> item<TAB>path<TAB>value for every setting,
-#   including the language and the time zone.
+#   including the language and the time zone, except the settings the
+#   item ignores (they are still restored, but never count as a change).
 flat_settings() {
     local view="$1" n d; shift
     for n in "$@"; do
         d="$view/items/$n"
-        [ -f "$d/dconf.ini" ] && ini_flat "$d/dconf.ini" "$n"
+        [ -f "$d/dconf.ini" ] && flat_without_ignored "$d/dconf.ini" "$n"
         [ -f "$d/language.txt" ] && awk -F= -v n="$n" 'NF { print n "\t(language) " $1 "\t" substr($0, index($0, "=") + 1) }' "$d/language.txt"
         [ -f "$d/timezone.txt" ] && printf '%s\t(time zone)\t%s\n' "$n" "$(cat "$d/timezone.txt")"
     done
@@ -256,13 +258,15 @@ same_file() {
 }
 
 # write_ignore_rules ITEM... -> item<TAB>home/path<TAB>beginning, from the
-#   "ignore" fields of the items (see lib/items.sh).
+#   file lines in the "ignore" fields of the items (see lib/items.sh).
 write_ignore_rules() {
-    local n p
+    local n p file
     for n in "$@"; do
         while IFS= read -r p; do
-            printf '%s\thome/%s\t%s\n' "$n" "$(printf '%s' "${p%%:*}" | sed 's|^~/||')" "${p#*:}"
-        done < <(split_words "${ITEM_IGNORE[$n]:-}")
+            [[ "$p" == "~/"* ]] || continue        # settings: see flat_settings
+            file="${p%%:*}"
+            printf '%s\thome/%s\t%s\n' "$n" "${file#\~/}" "${p#*:}"
+        done < <(ignore_words "$n")
     done > "$CC_TMP/ignore-rules.txt"
 }
 

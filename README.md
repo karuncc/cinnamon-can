@@ -221,7 +221,9 @@ Every part is an **item**: one small file in `items/` saying what it keeps.
 | `hardware` | monitor layout, text and pointer size, colour profiles, audio device names (same model only) | off |
 
 **Never kept:** Warpinator's computer ID, the night-light location, the
-screen scaling factor.
+screen scaling factor, and private histories: what you typed into the
+Run dialog (Alt+F2) and Looking Glass, what you searched for in Text
+Editor and in Passwords and Keys, the Bluetooth devices you connected to.
 
 Switch items on or off in `config/default.conf`:
 
@@ -247,11 +249,28 @@ exclude     = ~/Scripts/tmp/
   settings whose name starts with `c`. See them with `dconf dump /`.
 - `files`: `~/x/` a folder, `~/x` one file; `*` and `?` match within one
   folder.
-- `exclude`: `~/...` files or `/...` settings to leave out.
-- `ignore`: `~/path/file:start-of-line` — lines a program rewrites by itself
-  (a time stamp, a window size). They do not count as a difference, but the
-  file is still kept and restored whole. Example from `items/desktop.item`:
-  `ignore = ~/.config/nemo/desktop-metadata:nemo-icon-view-layout-timestamp=`
+- `exclude`: `~/...` files or `/...` settings to leave out. They are not
+  kept at all: use it for what is private or only means something on this
+  computer.
+- `ignore`: what a program writes by itself — where a window was, which
+  version ran last, a time stamp. It is still kept and restored with the
+  rest of the item, but it does not count as a difference, so it never
+  shows up in `diff` on its own. Settings are written as in `dconf`, or
+  as a name in any folder of the item: `*/window-size`, `*/migrated*`
+  (starts with), `*/*-history` (ends with). Lines in a file are written
+  `~/path/file:start-of-line`. Example:
+
+  ```ini
+  ignore = /org/x/editor/state/  */window-size
+           ~/.config/nemo/desktop-metadata:nemo-icon-view-layout-timestamp=
+  ```
+
+When `diff` keeps showing a line you did not change, a program wrote it
+by itself: add it to your item's `ignore`. If it comes from a built-in
+item, please open an issue (or see "Ignore lines in built-in items" in
+`CONTRIBUTING.md`), so everyone gets the fix. Your `diff` always uses the
+`ignore` lines of the items on this computer as well as the can's own,
+so a line added today also quiets cans you sealed before.
 
 Your item may not use the name of a built-in one. To change a built-in
 item, switch it off and make your own under a new name (copying the
