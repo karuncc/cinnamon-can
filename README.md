@@ -344,10 +344,10 @@ The log, `~/cinnamon-cans/cinnamon-can.log`, records every `seal` and `open`.
 
 ## Contributing
 
-Branch and commit conventions are in `CONTRIBUTING.md`, and the working
-rules (for people and AI tools alike) in `AGENTS.md`. Each release is
-summed up in its notes on the GitHub Releases page. Run
-`bash test/run-tests.sh` after a change.
+Branch, commit, pull request and release conventions are in
+`CONTRIBUTING.md`, and the working rules (for people and AI tools alike)
+in `AGENTS.md`. Each release is summed up in its notes on the GitHub
+Releases page. Run `bash test/run-tests.sh` after a change.
 
 ## License
 

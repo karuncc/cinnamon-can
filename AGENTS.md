@@ -142,10 +142,14 @@ LICENSE               MIT
 
 Commit, branch or push only when the person you are working with asks
 for it — in the owner's own checkout that means never: the owner makes
-every commit, and you propose the branch name and the commit message
-only. Whoever types it, person or AI, every branch and commit follows
-`CONTRIBUTING.md` in this folder; nothing outside the repo is needed.
-Changes reach this repository as pull requests under the same rules.
+every commit, and you propose the branch name, the commit message, the
+pull request title and description and, for a release, its notes. The
+owner works in the GitHub web page: give each of these as its own
+ready-to-paste block, and describe GitHub steps as clicks, not commands.
+Whoever types it, person or AI, every branch, commit, pull request and
+release follows `CONTRIBUTING.md` in this folder; nothing outside the
+repo is needed. Changes reach this repository as pull requests under the
+same rules.
 
 Before proposing a commit message, read the repository's actual state
 (`git status`, `git diff`, the current branch) and describe what really
