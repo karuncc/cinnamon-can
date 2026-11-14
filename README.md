@@ -39,7 +39,11 @@ running as root (only `open` may be run with sudo, see below).
 - not an installer — it lists the apps you installed and shows the commands
   to install the missing ones, but never runs them;
 - **not encrypted** — a can holds your settings and some files in plain
-  form. Keep cans somewhere private. Never add keys or passwords to an item.
+  form. Keep cans somewhere private. Never add keys or passwords to an item;
+- not a polished product — a small tool that grew out of one desktop,
+  written and maintained mostly with an AI assistant, and tested by
+  running it there. It is shared as it is: issues are read, but nothing
+  is promised.
 
 ---
 
