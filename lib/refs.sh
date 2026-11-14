@@ -2,26 +2,31 @@
 #
 # Settings often only NAME something that must exist elsewhere: a theme, a
 # font, an applet, an app pinned to the panel. check_refs TREE lists every
-# such name that is missing here, so you know what to install. It never
-# stops anything; it only reports.
+# such name that is not installed here, so you know what to install. It
+# never stops anything; it only reports.
 #
-# Output lines:  kind<TAB>name<TAB>note
+# Output lines:  kind<TAB>name<TAB>item[<TAB>flatpak remote]
 #   kind: theme icons cursor font applet desklet extension app input
 #         locale sound apt flatpak program source
+#   item: the item of the can whose settings or files name it
 #
 # Something the tree itself brings along (a theme in ~/.themes, an applet
 # in ~/.local/share/cinnamon ...) does not count as missing.
 
 check_refs() {
-    local tree="$1" flat="$CC_TMP/refs-settings.txt" v x f
-    : > "$flat"
-    for f in "$tree"/items/*/dconf.ini; do [ -f "$f" ] && ini_flat "$f" >> "$flat"; done
-
+    local tree="$1" flat="$CC_TMP/refs-settings.txt" v x f n
     # setting PATH -> its value in the tree, without quotes or a type
     #   prefix such as "@as " ('' if unset).
-    setting() { awk -F'\t' -v p="$1" '$1 == p { v = $2; sub(/^@[a-z]+ /, "", v); gsub(/^'"'"'|'"'"'$/, "", v); print v; exit }' "$flat"; }
+    setting() { awk -F'\t' -v p="$1" '$2 == p { v = $3; sub(/^@[a-z]+ /, "", v); gsub(/^'"'"'|'"'"'$/, "", v); print v; exit }' "$flat"; }
+    # setting_item PATH -> the item that holds that setting.
+    setting_item() { awk -F'\t' -v p="$1" '$2 == p { print $1; exit }' "$flat"; }
+    # item_of FILE -> the item a file of the tree belongs to.
+    item_of() { n="${1#"$tree"/items/}"; printf '%s' "${n%%/*}"; }
     # in_tree REL -> success if the tree brings home/REL along.
     in_tree() { compgen -G "$tree/items/*/home/$1" >/dev/null; }
+
+    : > "$flat"
+    for f in "$tree"/items/*/dconf.ini; do [ -f "$f" ] && ini_flat "$f" "$(item_of "$f")" >> "$flat"; done
 
     # --- Themes, icons, cursor ---
     for x in /org/cinnamon/desktop/interface/gtk-theme /org/cinnamon/theme/name /org/gnome/desktop/wm/preferences/theme; do
@@ -29,14 +34,14 @@ check_refs() {
         [ -n "$v" ] || continue
         [ -d "$HOME/.themes/$v" ] || [ -d "$HOME/.local/share/themes/$v" ] || [ -d "/usr/share/themes/$v" ] \
             || in_tree ".themes/$v" || in_tree ".local/share/themes/$v" \
-            || printf 'theme\t%s\t%s\n' "$v" "${x##*/}"
+            || printf 'theme\t%s\t%s\n' "$v" "$(setting_item "$x")"
     done
     for x in icon-theme cursor-theme; do
         v="$(setting "/org/cinnamon/desktop/interface/$x")"
         [ -n "$v" ] || continue
         [ -d "$HOME/.icons/$v" ] || [ -d "$HOME/.local/share/icons/$v" ] || [ -d "/usr/share/icons/$v" ] \
             || in_tree ".icons/$v" || in_tree ".local/share/icons/$v" \
-            || printf '%s\t%s\t%s\n' "${x%-theme}" "$v" "not installed"
+            || printf '%s\t%s\t%s\n' "${x%-theme}" "$v" "$(setting_item "/org/cinnamon/desktop/interface/$x")"
     done
 
     # --- Fonts ---
@@ -49,12 +54,13 @@ check_refs() {
              /org/gnome/desktop/interface/monospace-font-name /org/cinnamon/desktop/wm/preferences/titlebar-font; do
         v="$(setting "$x")"
         [ -n "$v" ] || continue
-        font_known "$v" "$families" || printf 'font\t%s\t%s\n' "$v" "${x##*/}"
+        font_known "$v" "$families" || printf 'font\t%s\t%s\n' "$v" "$(setting_item "$x")"
     done
 
     # --- Applets, desklets, extensions ---
-    local kind uuid
+    local kind uuid where
     for kind in applet desklet extension; do
+        where="$(setting_item "/org/cinnamon/enabled-${kind}s")"
         setting "/org/cinnamon/enabled-${kind}s" | tr -d "[]' " | tr ',' '\n' | while IFS= read -r x; do
             [ -n "$x" ] || continue
             case "$kind" in
@@ -64,22 +70,23 @@ check_refs() {
             esac
             [ -n "$uuid" ] || continue
             [ -d "/usr/share/cinnamon/${kind}s/$uuid" ] || [ -d "$HOME/.local/share/cinnamon/${kind}s/$uuid" ] \
-                || in_tree ".local/share/cinnamon/${kind}s/$uuid" || printf '%s\t%s\t%s\n' "$kind" "$uuid" "not installed"
+                || in_tree ".local/share/cinnamon/${kind}s/$uuid" || printf '%s\t%s\t%s\n' "$kind" "$uuid" "$where"
         done
     done
 
     # --- Apps the panel, the menu and the default apps point at ---
     {
-        setting /org/cinnamon/favorite-apps | tr -d "[]' " | tr ',' '\n' | sed 's/$/\tmenu favourite/'
+        where="$(setting_item /org/cinnamon/favorite-apps)"
+        setting /org/cinnamon/favorite-apps | tr -d "[]' " | tr ',' '\n' | sed "s/\$/\t$where/"
         for f in "$tree"/items/*/home/.config/cinnamon/spices/grouped-window-list@cinnamon.org/*.json; do
-            [ -f "$f" ] && json_list "$f" pinned-apps | sed 's/$/\tpinned to the panel/'
+            [ -f "$f" ] && json_list "$f" pinned-apps | sed "s/\$/\t$(item_of "$f")/"
         done
         for f in "$tree"/items/*/home/.config/cinnamon/spices/panel-launchers@cinnamon.org/*.json; do
-            [ -f "$f" ] && json_list "$f" launcherList | sed 's/$/\tpanel launcher/'
+            [ -f "$f" ] && json_list "$f" launcherList | sed "s/\$/\t$(item_of "$f")/"
         done
         for f in "$tree"/items/*/home/.config/mimeapps.list; do
-            [ -f "$f" ] && awk -F= '/^\[/ { on = ($0 == "[Default Applications]"); next }
-                on && NF == 2 { n = split($2, a, ";"); for (i = 1; i <= n; i++) if (a[i] != "") print a[i] "\tdefault app" }' "$f"
+            [ -f "$f" ] && awk -F= -v i="$(item_of "$f")" '/^\[/ { on = ($0 == "[Default Applications]"); next }
+                on && NF == 2 { n = split($2, a, ";"); for (k = 1; k <= n; k++) if (a[k] != "") print a[k] "\t" i }' "$f"
         done
         true
     } | sort -u -t$'\t' -k1,1 | while IFS=$'\t' read -r x v; do
@@ -93,9 +100,9 @@ check_refs() {
         [ -f "$f" ] || continue
         v="$(awk '/^run_im/ { print $2; exit }' "$f")"
         case "$v" in
-            fcitx)  command -v fcitx >/dev/null 2>&1       || printf 'input\tfcitx\tinput method\n' ;;
-            fcitx5) command -v fcitx5 >/dev/null 2>&1      || printf 'input\tfcitx5\tinput method\n' ;;
-            ibus)   command -v ibus-daemon >/dev/null 2>&1 || printf 'input\tibus\tinput method\n' ;;
+            fcitx)  command -v fcitx >/dev/null 2>&1       || printf 'input\tfcitx\t%s\n' "$(item_of "$f")" ;;
+            fcitx5) command -v fcitx5 >/dev/null 2>&1      || printf 'input\tfcitx5\t%s\n' "$(item_of "$f")" ;;
+            ibus)   command -v ibus-daemon >/dev/null 2>&1 || printf 'input\tibus\t%s\n' "$(item_of "$f")" ;;
         esac
     done
 
@@ -103,38 +110,43 @@ check_refs() {
     local have_locales="$CC_TMP/refs-locales.txt"
     locale -a 2>/dev/null | norm_locale | sort -u > "$have_locales"
     {
-        for f in "$tree"/items/*/language.txt; do [ -f "$f" ] && cut -d= -f2 "$f"; done
-        for f in "$tree"/items/*/root/etc/default/locale; do [ -f "$f" ] && cut -d= -f2 "$f" | tr -d '"'; done
+        for f in "$tree"/items/*/language.txt; do
+            [ -f "$f" ] && cut -d= -f2 "$f" | sed "s/\$/\t$(item_of "$f")/"
+        done
+        for f in "$tree"/items/*/root/etc/default/locale; do
+            [ -f "$f" ] && cut -d= -f2 "$f" | tr -d '"' | sed "s/\$/\t$(item_of "$f")/"
+        done
         true
-    } | while IFS= read -r v; do
+    } | while IFS=$'\t' read -r v x; do
         [ -n "$v" ] && [ "$v" != "C" ] && [ "$v" != "POSIX" ] || continue
-        grep -qx "$(printf '%s\n' "$v" | norm_locale)" "$have_locales" || printf 'locale\t%s\t%s\n' "$v" "not installed"
-    done | sort -u
+        grep -qx "$(printf '%s\n' "$v" | norm_locale)" "$have_locales" || printf 'locale\t%s\t%s\n' "$v" "$x"
+    done | sort -u -t$'\t' -k2,2
 
     # --- Sound theme ---
     v="$(setting /org/gnome/desktop/sound/theme-name)"
     if [ -n "$v" ] && [ ! -d "/usr/share/sounds/$v" ] && [ ! -d "$HOME/.local/share/sounds/$v" ]; then
-        printf 'sound\t%s\t%s\n' "$v" "sound theme"
+        printf 'sound\t%s\t%s\n' "$v" "$(setting_item /org/gnome/desktop/sound/theme-name)"
     fi
 
     # --- Software ---
     for f in "$tree"/items/*/software.txt; do
         [ -f "$f" ] || continue
+        where="$(item_of "$f")"
         local installed="$CC_TMP/refs-dpkg.txt" flatpaks="$CC_TMP/refs-flatpak.txt"
         dpkg-query -W -f='${Package} ${Status}\n' 2>/dev/null | awk '$NF == "installed" { print $1 }' | sort -u > "$installed"
         { flatpak list --app --columns=application 2>/dev/null || true; } | sort -u > "$flatpaks"
         { software_section "$f" apps; software_section "$f" language-support; } | while IFS= read -r x; do
-            grep -qx "$x" "$installed" || printf 'apt\t%s\t%s\n' "$x" "not installed"
+            grep -qx "$x" "$installed" || printf 'apt\t%s\t%s\n' "$x" "$where"
         done
         software_section "$f" flatpak | while IFS=$'\t' read -r x v; do
             x="${x%% *}"; [ -n "$x" ] || continue
-            grep -qx "$x" "$flatpaks" || printf 'flatpak\t%s\t%s\n' "$x" "${v:-flathub}"
+            grep -qx "$x" "$flatpaks" || printf 'flatpak\t%s\t%s\t%s\n' "$x" "$where" "${v:-flathub}"
         done
         software_section "$f" local-programs | while IFS= read -r x; do
-            [ -e "$x" ] || printf 'program\t%s\t%s\n' "$x" "not here"
+            [ -e "$x" ] || printf 'program\t%s\t%s\n' "$x" "$where"
         done
         software_section "$f" sources | while IFS=$'\t' read -r x v; do
-            [ -e "/etc/apt/sources.list.d/$x" ] || printf 'source\t%s\t%s\n' "$x" "$v"
+            [ -e "/etc/apt/sources.list.d/$x" ] || printf 'source\t%s\t%s\n' "$x" "$where"
         done
     done
     return 0
@@ -184,27 +196,33 @@ json_list() {
 # norm_locale -> "th_TH.UTF-8" and "th_TH.utf8" both become "th_th".
 norm_locale() { tr '[:upper:]' '[:lower:]' | sed 's/\.utf-\{0,1\}8$//; s/@.*$//'; }
 
-# show_missing REFS TREE -> the report, with commands to install software.
+# show_missing REFS TREE -> what the can uses that is not installed here
+#   (themes, fonts, apps ...), with commands to install the software:
+#   a warning when something is missing, a plain line when nothing is.
+#   (On the normal output, since it is part of a report.)
 show_missing() {
-    local refs="$1" tree="$2" kind name note apt="" flat=""
+    local refs="$1" tree="$2" kind name where remote apt="" flat="" l
+    say ""
     if [ ! -s "$refs" ]; then
-        say "  nothing"
+        say "Everything the can uses is installed on this computer."
         return 0
     fi
-    while IFS=$'\t' read -r kind name note; do
-        printf '  %-9s %-36s %s\n' "$kind" "$name" "$note"
+    msg_lines "$B_WARN" "Used by the can, but not installed on this computer:"
+    table_head 9 "TYPE" 36 "NAME" 0 "USED BY ITEM"
+    while IFS=$'\t' read -r kind name where remote; do
+        printf '%s%-9s %-36s %s\n' "$ROW" "$kind" "$name" "$where"
         case "$kind" in
             apt)     apt="$apt $name" ;;
-            flatpak) flat="${flat}    flatpak install $note $name"$'\n' ;;
+            flatpak) flat="${flat}flatpak install ${remote:-flathub} $name"$'\n' ;;
         esac
     done < "$refs"
     if [ -n "$apt$flat" ]; then
         say ""
-        say "  To install what is missing (check the list first):"
-        [ -z "$apt" ] || say "    sudo apt install$apt"
-        [ -z "$flat" ] || printf '%s' "$flat"
         if grep -q '^source' "$refs"; then
-            say "  Add the missing software sources first (see the \"source\" lines above)."
+            say "Add the missing software sources first (the \"source\" rows above)."
         fi
+        say "To install the missing software, check the list above, then run:"
+        [ -z "$apt" ] || say "\$ sudo apt install$apt"
+        [ -z "$flat" ] || while IFS= read -r l; do [ -z "$l" ] || say "\$ $l"; done <<< "$flat"
     fi
 }

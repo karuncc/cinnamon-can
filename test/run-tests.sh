@@ -81,10 +81,18 @@ run s out "$CC" help
 check "help: exit 0"                   [ "$s" -eq 0 ]
 run s out "$CC" frobnicate
 check "unknown command: exit 2"        [ "$s" -eq 2 ]
-check "unknown command: message"       has "$out" "unknown command"
+check "unknown command: message"       has "$out" "  ERROR  Unknown command"
+check "... the hint starts under it"   has "$out" "$(printf '\n         Run "cinnamon-can help"')"
 run s out "$CC" -c no-such-config list
 check "missing config: exit 1"         [ "$s" -eq 1 ]
-check "missing config: message"        has "$out" "config file not found"
+check "missing config: message"        has "$out" "Provided config file not found: config/no-such-config.conf"
+# A config with several mistakes: one header, then one line per mistake.
+printf '[general]\nbackup_dir = %s\nnot a setting\n[items]\nshell = maybe\n  or not\n[colours]\nx = 1\n' "$TMP/cans" > "$TMP/bad.conf"
+run s out "$CC" -c "$TMP/bad.conf" list
+check "bad config: exit 1"             [ "$s" -eq 1 ]
+check "bad config: one header"         has "$out" "  ERROR  Invalid config file(s) detected:"
+check "... the file under it, with a dot" has "$out" "         └ • $TMP/bad.conf"
+check "... every mistake under the file"  sh -c 'for w in "L3: Expected" "L5-6: Item" "L7: Unknown section [colours]"; do printf "%s" "$1" | grep -qF "           └ $w" || exit 1; done' sh "$out"
 
 
 section "start-up checks"
@@ -93,7 +101,8 @@ printf '#!/bin/sh\nexit 1\n' > "$TMP/broken-tool/cinnamon"
 chmod +x "$TMP/broken-tool/cinnamon"
 run s out env PATH="$TMP/broken-tool:$PATH" "$CC" list
 check "broken cinnamon: exit 1, not a silent stop"  [ "$s" -eq 1 ]
-check "broken cinnamon: clear message"              has "$out" "could not find Cinnamon"
+check "broken cinnamon: clear message"              has "$out" "  ERROR  This computer cannot run cinnamon-can:"
+check "... with the reason below it"                has "$out" "         └ Could not find Cinnamon"
 
 
 section "seal, list, peek"
@@ -105,9 +114,14 @@ check "the can's name has the right shape" \
     sh -c 'basename "$1" | grep -qE "^manual-[2-9A-HJKMNP-Z]{4}-[0-9]{8}T[0-9]{6}[+-][0-9]{4}\.tar\.gz\.canned$"' sh "$BASE"
 BASEID="$(basename "$BASE" | cut -d- -f2)"
 check "seal was logged" grep -q "cmd=seal" "$TMP/cans/cinnamon-can.log"
+check "seal starts with what it seals"  sh -c 'printf "%s" "$1" | grep -qF "   INFO  Sealing the can [$2] ..." && printf "%s" "$1" | grep -qF "         └ Label: test can"' sh "$out" "$BASEID"
+check "... lists the items as a tree"  has "$out" "         └ keyboard "
+check "seal ends with the ID under OK"   sh -c 'printf "%s" "$1" | grep -qF "     OK  The can is sealed:" && printf "%s" "$1" | grep -qF "         └ ID:     [$2]"' sh "$out" "$BASEID"
+check "... the folder (whole, without a terminal) and the file name" sh -c 'printf "%s" "$1" | grep -qF "└ Folder: $(dirname "$2")" && printf "%s" "$1" | grep -qF "└ File:   $(basename "$2")"' sh "$out" "$BASE"
 run s out "$CC" -c "$CONF" list
 check "list: exit 0"            [ "$s" -eq 0 ]
-check "list shows the can"      has "$out" "$BASEID"
+check "list shows the can ID, in [] without a terminal" has "$out" "[$BASEID]"
+check "list says it is sorted by CREATED" has "$out" "CREATED DESC"
 check "list shows the label"    has "$out" "test can"
 run s out "$CC" -c "$CONF" peek "$BASEID"
 check "peek: exit 0"            [ "$s" -eq 0 ]
@@ -121,7 +135,7 @@ run s out "$CC" -c "$CONF" diff "$BASEID"
 check "diff right after seal: no differences, exit 0" [ "$s" -eq 0 ]
 run s out "$CC" -c "$CONF" open "$BASEID"
 check "open on a matching can stops by itself"        [ "$s" -eq 0 ]
-check "open says it already matches"                  has "$out" "already matches"
+check "open says it already matches"                  has "$out" "settings already match"
 # A can that differs ONLY in a system file: open must stop and point at
 # the sudo command instead of asking, saving an autocan and restarting.
 U="$TMP/unpack-system"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
@@ -132,7 +146,8 @@ if [ -d "$U/items/system/root" ]; then
     ( cd "$U" && tar -czf "$TMP/cans/manual-SYS2-20300101T000001+0000.tar.gz.canned" . )
     run s out "$CC" -c "$CONF" open SYS2
     check "open stops when only system files differ"  [ "$s" -eq 0 ]
-    check "open shows the sudo command for them"      has "$out" "sudo "
+    check "open shows the sudo command for them"      has "$out" "       \$ sudo "
+    check "... and marks the system file"             has "$out" "[SUDO REQUIRED]"
 else
     printf '  skip the can has no system files on this computer\n'
 fi
@@ -143,18 +158,57 @@ U="$TMP/unpack-differs"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
 printf '\n[org/cinnamon/sounds]\ncc-test-key=true\n' >> "$U/items/sound/dconf.ini"
 mkdir -p "$U/items/sound/home/.config"
 echo hello > "$U/items/sound/home/.config/cc-test-file.txt"
+# One more line at the end of a text file the can has: shown with its number.
+T="$(find "$U/items" -path '*/home/*' -type f -name '*.json' | head -n 1)"
+TN="$(wc -l < "$T")"
+[ -z "$(tail -c 1 "$T")" ] || { echo >> "$T"; TN=$((TN + 1)); }
+echo "cc-added-line" >> "$T"
 sed -i 's/^id[[:space:]]*=.*/id = TES2/' "$U/manifest.txt"
 ( cd "$U" && tar -czf "$TMP/cans/manual-TES2-20300101T000000+0000.tar.gz.canned" . )
 run s out "$CC" -c "$CONF" diff "$BASEID" TES2
 check "diff with differences: exit 1"                   [ "$s" -eq 1 ]
-check "a setting only in one can: (default) on -"       has "$out" "-(default)"
-check "... and its real value on +"                     has "$out" "+true"
-check "the new file is shown"                           has "$out" "cc-test-file.txt"
-check "the summary counts them"                         has "$out" "1 setting(s), 1 file(s), 0 system change(s)"
+check "a setting only in one can: (default) on -"       has "$out" "      -    (default)"
+check "... and its real value on +"                     has "$out" "      +    true"
+check "the new file is shown: NEW, a dot and its size"  has "$out" "     NEW └ • ~/.config/cc-test-file.txt  (+1 | -0)"
+check "a changed line shows its real line number"       has "$out" "$(printf '      +  %4s  cc-added-line' $((TN + 1)))"
+check "the summary counts them, one row per kind"       sh -c 'for w in "● 1 setting(s) differ" "● 2 file(s) differ" "● 0 system change(s)"; do printf "%s" "$1" | grep -qF "└ $w" || exit 1; done' sh "$out"
+check "the two sides are named with - and +"           sh -c 'printf "%s" "$1" | grep -qF "         (-) Can [$2] (label: test can)" && printf "%s" "$1" | grep -qF "         (+) Can [TES2] (label: test can)"' sh "$out" "$BASEID"
+check "the summary says it sums up the report"         has "$out" "Summary of the comparison above:"
 l1="$(printf '%s\n' "$out" | grep -nF -m1 'cc-test-key'      | cut -d: -f1)" || true
 l2="$(printf '%s\n' "$out" | grep -nF -m1 'cc-test-file.txt' | cut -d: -f1)" || true
 check "inside an item, settings come before files" \
     test -n "$l1" -a -n "$l2" -a "$l1" -lt "$l2"
+
+# Two cans made on different versions: the difference is named.
+U="$TMP/unpack-version"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+sed -i 's/^id[[:space:]]*=.*/id = VER2/; s/^cinnamon_version[[:space:]]*=.*/cinnamon_version = 0.0.1/' "$U/manifest.txt"
+( cd "$U" && tar -czf "$TMP/cans/manual-VER2-20300101T000006+0000.tar.gz.canned" . )
+run s out "$CC" -c "$CONF" diff "$BASEID" VER2
+check "two cans of different versions: the warning"  has "$out" "The two cans were made on different versions:"
+check "... naming both cans"                         has "$out" "Cinnamon $(sed -n 's/^cinnamon_version *= *//p' "$TMP/unpack-differs/manifest.txt") in can [$BASEID], 0.0.1 in can [VER2]"
+
+# A can that uses a theme and a package this computer does not have: each
+# is listed with the item that uses it.
+U="$TMP/unpack-missing"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+sed -i 's/^id[[:space:]]*=.*/id = MIS2/' "$U/manifest.txt"
+sed -i "s/^gtk-theme=.*/gtk-theme='cc-no-such-theme'/" "$U/items/appearance/dconf.ini" 2>/dev/null || true
+SW="$(find "$U/items" -name software.txt | head -n 1)"
+[ -z "$SW" ] || sed -i '/^\[apps\]$/a cc-no-such-package' "$SW"
+( cd "$U" && tar -czf "$TMP/cans/manual-MIS2-20300101T000007+0000.tar.gz.canned" . )
+run s out "$CC" -c "$CONF" diff "$BASEID" MIS2
+if grep -q "cc-no-such-theme" "$U/items/appearance/dconf.ini" 2>/dev/null; then
+    check "a theme that is not installed is listed with its item" \
+        sh -c 'printf "%s" "$1" | grep -qE "└ theme +cc-no-such-theme +appearance$"' sh "$out"
+else
+    printf '  skip the can has no gtk-theme setting\n'
+fi
+if [ -n "$SW" ]; then
+    check "a package that is not installed is listed with its item" \
+        sh -c 'printf "%s" "$1" | grep -qE "└ apt +cc-no-such-package +$2$"' sh "$out" "$(basename "$(dirname "$SW")")"
+    check "... with the command to install it"     has "$out" "       \$ sudo apt install cc-no-such-package"
+else
+    printf '  skip the can has no software list\n'
+fi
 
 
 section "ignore: what programs write by themselves does not count"
@@ -183,7 +237,21 @@ run s out "$CC" -c "$CONF" diff "$BASEID" GN22
 check "the real change still counts: exit 1"            [ "$s" -eq 1 ]
 check "... and is shown"                                has "$out" "cc-real-key"
 check "ignored settings are not shown"                  sh -c '! printf "%s" "$1" | grep -qE "cc-ign|/c$"' sh "$out"
-check "only the real change is counted"                 has "$out" "1 setting(s), 0 file(s)"
+check "only the real change is counted"                 sh -c 'printf "%s" "$1" | grep -qF "● 1 setting(s) differ" && printf "%s" "$1" | grep -qF "● 0 file(s) differ"' sh "$out"
+# A real line after an ignored one: the ignored line is not shown, but the
+# real line keeps its real line number.
+if [ -n "$R" ]; then
+    U="$TMP/unpack-ignore2"; mkdir "$U"
+    tar -C "$U" -xzf "$TMP/cans/manual-GN22-20300101T000004+0000.tar.gz.canned"
+    F="$(find "$U/items" -path "*/home/${R#\~/}" -type f | head -n 1)"
+    echo "cc-real-line=1" >> "$F"
+    sed -i 's/^id[[:space:]]*=.*/id = GN33/' "$U/manifest.txt"
+    ( cd "$U" && tar -czf "$TMP/cans/manual-GN33-20300101T000005+0000.tar.gz.canned" . )
+    run s out "$CC" -c "$CONF" diff "$BASEID" GN33
+    check "a line after an ignored one keeps its real number" \
+        has "$out" "$(printf '      +  %4s  cc-real-line=1' "$(wc -l < "$F")")"
+    check "... and the ignored line is not shown"     hasnt "$out" "cc-noise-line"
+fi
 [ -n "$R" ] || printf '  skip the can has no home file to add a line to\n'
 
 # An OLDER can: its own items know nothing of an ignore line that this
@@ -205,8 +273,10 @@ mkdir -p "$TMP/items"
 printf 'description = test\ndconf = /cc/test/\nignore = */*both-ends* not-a-path ~/no-beginning */fine\n' > "$TMP/items/cc-bad.item"
 run s out "$CC" -c "$CONF" list
 check "a wrong ignore stops the program: exit 1"        [ "$s" -eq 1 ]
+check "... under one header for all item files"         has "$out" "  ERROR  Invalid item file(s) detected:"
 check "... naming every wrong entry"                    sh -c 'for w in "*/*both-ends*" not-a-path "~/no-beginning"; do printf "%s" "$1" | grep -qF "\"$w\"" || exit 1; done' sh "$out"
 check "... but not the good one"                        hasnt "$out" '"*/fine"'
+check "... grouped by file, each problem with its line"  sh -c 'printf "%s" "$1" | grep -qF "         └ • $2/cc-bad.item" && printf "%s" "$1" | grep -qF "           └ L3: Entry"' sh "$out" "$TMP/items"
 rm -rf "$TMP/items"
 
 
@@ -216,11 +286,12 @@ printf '# cinnamon-can manifest\n[can]\nid = BRK2\n' > "$TMP/broken-can/manifest
 ( cd "$TMP/broken-can" && tar -czf "$TMP/cans/manual-BRK2-20300101T000002+0000.tar.gz.canned" . )
 run s out "$CC" -c "$CONF" list
 check "list survives a broken manifest: exit 0"  [ "$s" -eq 0 ]
-check "list warns about it"                      has "$out" "broken manifest"
+check "list warns about it, with the reason"     has "$out" "└ Reason: its manifest is incomplete"
+check "... under the file name, with a dot"      has "$out" "         └ • manual-BRK2-"
 check "list still shows the good can"            has "$out" "$BASEID"
 run s out "$CC" -c "$CONF" peek BRK2
 check "peek refuses it: exit 1"                  [ "$s" -eq 1 ]
-check "peek says why"                            has "$out" "broken manifest"
+check "peek says why, the file on its own line"  sh -c 'printf "%s" "$1" | grep -qF "incomplete manifest" && printf "%s" "$1" | grep -qF "         └ • "' sh "$out"
 echo "this is not a tar file" > "$TMP/cans/manual-GRB2-20300101T000003+0000.tar.gz.canned"
 run s out "$CC" -c "$CONF" peek GRB2
 check "peek on a damaged file: exit 1"           [ "$s" -eq 1 ]

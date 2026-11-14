@@ -19,9 +19,9 @@ cmd_seal() {
     local label=""
     while [ $# -gt 0 ]; do
         case "$1" in
-            -L|--label) [ $# -ge 2 ] || die "$1 needs a text"; label="$2"; shift ;;
+            -L|--label) [ $# -ge 2 ] || die "Option $1 needs a text"; label="$2"; shift ;;
             --label=*)  label="${1#--label=}" ;;
-            *) die "seal does not take \"$1\" (see: cinnamon-can help)" ;;
+            *) die "Command \"seal\" does not take \"$1\" (see: cinnamon-can help)" ;;
         esac
         shift
     done
@@ -33,24 +33,34 @@ cmd_seal() {
     local stage="$CC_TMP/stage"
     local -a on=()
     mapfile -t on < <(items_on)
-    [ "${#on[@]}" -gt 0 ] || die "every item is switched off in $(to_tilde "$CONF_FILE")"
+    [ "${#on[@]}" -gt 0 ] || die "Every item is switched off in $(rel_path "$CONF_FILE")"
 
-    info "reading this computer ..."
+    info "Reading this computer's settings ..."
     collect_tree "$stage" "${on[@]}"
     package_can "$stage" manual "$label" ""
     log_add "cmd=seal  can=$CAN_ID${label:+  label=\"$label\"}"
 
     read_manifest "$stage/manifest.txt"
     say ""
-    can_header
-    title "Items"
-    summarize_tree "$stage"
-    title "Missing on this computer"
+    can_header "Sealing the can $(show_id "$CAN_ID") ..."
+    say ""
+    summarize_tree "Items to be sealed:" "$stage"
     check_refs "$stage" > "$CC_TMP/refs.txt"
     show_missing "$CC_TMP/refs.txt" "$stage"
     say ""
-    ok "sealed $(to_tilde "$CAN_PATH")  ($(human_size "$(stat -c %s "$CAN_PATH")"))"
-    say "   ID: ${C_BOLD}$CAN_ID${C_RESET}"
+    show_sealed "The can is sealed:"
+}
+
+# show_sealed TEXT -> TEXT as a success, then the can just made (CAN_ID,
+#   CAN_PATH): its ID, size, folder and file name. (Also used by "open"
+#   for the autocan.) A long folder name is cut at the front, so the line
+#   still fits on the screen.
+show_sealed() {
+    ok "$1" \
+       "${SUB}ID:     $(show_id "$CAN_ID")" \
+       "${SUB}Size:   $(human_size "$(stat -c %s "$CAN_PATH")")" \
+       "${SUB}Folder: $(fit_end "$(to_tilde "$(dirname "$CAN_PATH")")" $(( $(screen_width) - 19 )))" \
+       "${SUB}File:   $(basename "$CAN_PATH")"
 }
 
 # package_can STAGE KIND LABEL OPENED
@@ -61,7 +71,7 @@ CAN_ID="" CAN_PATH=""
 package_can() {
     local stage="$1" kind="$2" label="$3" opened="$4" dir part n
     dir="$(backup_dir)"
-    mkdir -p "$dir" || die "cannot create the backup folder $dir"
+    mkdir -p "$dir" || die "Cannot create the backup folder $dir"
     chmod 700 "$dir" 2>/dev/null || true
 
     CAN_ID="$(new_can_id)"
