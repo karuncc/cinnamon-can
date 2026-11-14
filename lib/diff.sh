@@ -407,11 +407,12 @@ change_line() {
 
 # line_counts OLD NEW -> "  (+12 | -0)" for a new text file of 12 lines (each
 #   side is a file, or 0 when that side has none); nothing for a binary
-#   file.
+#   file, and nothing for a link: it has no lines of its own, and what it
+#   points to may not exist on this computer.
 line_counts() {
     local p=0 m=0
-    if [ "$1" != 0 ]; then is_text "$1" || return 0; m="$(wc -l < "$1")"; fi
-    if [ "$2" != 0 ]; then is_text "$2" || return 0; p="$(wc -l < "$2")"; fi
+    if [ "$1" != 0 ]; then [ ! -L "$1" ] && is_text "$1" || return 0; m="$(wc -l < "$1")"; fi
+    if [ "$2" != 0 ]; then [ ! -L "$2" ] && is_text "$2" || return 0; p="$(wc -l < "$2")"; fi
     printf '  %s' "$(line_counts_text "$p" "$m")"
 }
 
