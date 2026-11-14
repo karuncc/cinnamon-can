@@ -97,22 +97,95 @@ Assisted-by: Claude Fable 5
 
 ## Pull requests
 
+A pull request is written like one commit message for the whole branch,
+so it looks the same whoever opens it, a person or an AI tool.
+
 - Fork, make a `type/short-kebab-name` branch, and keep every commit in
   the format above — AI-written commits included; that is what the
   `Assisted-by` trailer is for.
 - Run `bash test/run-tests.sh` before opening the pull request; it must
   end with `0 failed`, and new behaviour comes with a new check.
-- The title follows the summary rules above; the description says what
-  changed and why, in a few short bullets.
-- Pull requests are merged on GitHub as a merge commit or a squash —
-  never a rebase.
+- **Title:** a commit summary, same rules. When the branch has several
+  commits, use the type and summary of the main change (`feat` before
+  `fix`).
+- **Description:** written like a commit body: short `- ` bullets saying
+  what the whole branch changes, at an overview level. When an AI wrote
+  most of the branch, end with `Assisted-by: <model name>` after a blank
+  line, as in a commit. Nothing else: no headings, checklists or test
+  output.
+- **Merging:** on GitHub, as a merge commit or a squash — never a
+  rebase. Keep the message GitHub proposes (for a merge commit "Merge
+  pull request #N from owner/branch" with the title below it): it is the
+  same whoever merges. Then delete the branch.
+
+Example:
+
+```
+Title:
+feat: let items ignore settings that programs write themselves
+
+Description:
+- accept settings in an item's `ignore` (also `*/name`, `*/name*`,
+  `*/*name`); they are kept and restored, but never counted in `diff`
+- use this computer's `ignore` lines as well as the can's, so older
+  cans are quieted too
+- ignore window places, last-used values and version notes in `nemo`,
+  `keyboard`, `other` and `app-settings`
+- stop keeping private histories (Run dialog, searches, Bluetooth
+  devices)
+
+Assisted-by: Claude Opus 5.5
+```
 
 ## Releases
 
-Releases are made on GitHub's Release page, not on the command line:
+Releases are made on GitHub's Release page, not on the command line.
 
-1. Bump `CC_VERSION` at the top of `cinnamon-can` in a
-   `chore: release X.Y.Z` commit.
-2. On GitHub, create a release with a new `vX.Y.Z` tag. The release
-   notes are the changelog: a few bullets in the same style as a commit
-   body, saying what the release changes at an overview level.
+**Version number** `MAJOR.MINOR.PATCH`:
+
+- MAJOR goes up when cans or configs made with an older version stop
+  working;
+- MINOR goes up when the release lets you do something new;
+- PATCH goes up when it only fixes things or improves the docs.
+
+**Steps:**
+
+1. Run the over-time noise check (`AGENTS.md`, Testing) and fix what it
+   finds first.
+2. Bump `CC_VERSION` at the top of `cinnamon-can` in a
+   `chore: release X.Y.Z` commit, through a pull request like any change.
+3. On GitHub: Releases → "Draft a new release" → choose a tag, type the
+   new `vX.Y.Z` and create it on `main` → title `cinnamon-can X.Y.Z` →
+   the notes below → "Publish release".
+
+**Release notes** are the changelog, written for users:
+
+- one short sentence that sums up the release;
+- a few `- ` bullets in the style of a commit body, saying what users
+  can now do or what behaves differently, new things first, then fixes;
+- a closing sentence only when users must know or do something (read
+  the limits, seal a new can ...);
+- no `Assisted-by`: every commit already carries its own.
+
+Example, the first release:
+
+```
+Title:
+cinnamon-can 1.0.0
+
+Notes:
+First release.
+
+- `seal`, `list`, `peek`, `diff` and `open` snapshot a Linux Mint 22.x
+  Cinnamon desktop and put it back, on this computer or on a new one
+- one small item file per part of the desktop decides what is kept;
+  add your own items and switch any item on or off in the config
+- `open` shows the full diff first, asks for `yes`, saves an undo
+  autocan, then restarts; system files are only written with sudo
+- cans carry their own item catalog, the wallpaper image, language,
+  time zone and a software list, and `peek`/`diff` tell you what the
+  target computer is missing (never installed for you)
+- `test/run-tests.sh` runs 64 checks without touching the computer
+
+See `README.md` for scope and limitations — cans are not encrypted.
+```
