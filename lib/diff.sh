@@ -9,6 +9,10 @@
 #      the old home folder is replaced by yours, and a wallpaper image
 #      this computer lacks is placed in ~/.local/share/backgrounds/cinnamon-can/.
 #      For this computer, the view is read with the same code as "seal".
+#      Of two cans, the "-" can is first sorted into the "+" can's items
+#      (resplit_tree), so both sides are split the same way. Files of
+#      the "-" can that none of those items takes cannot be compared; a
+#      warning on top of the report says how many, and from which item.
 #   2. The two views are lined up: every setting and every file that
 #      differs becomes one line in a result list.
 #   3. The result is shown like "git diff": per item, settings first,
@@ -38,7 +42,7 @@ CMP_ITEMS=()
 
 # build_comparison CAN [CAN2]
 build_comparison() {
-    local plus_can minus_can="" minus_label notes n notes_title="Differs from this computer:"
+    local plus_can minus_can="" minus_label notes n m_id="" notes_title="Differs from this computer:"
     plus_can="$(resolve_can "${2:-$1}")" || exit 1
     [ $# -eq 1 ] || { minus_can="$(resolve_can "$1")" || exit 1; }
 
@@ -68,17 +72,22 @@ build_comparison() {
         prepare_view "$CC_TMP/can-plus" "$plus_home" "$CMP_PLUS" 1 "${CMP_ITEMS[@]}"
         minus_label="This computer"
     else
-        # Two cans: every item either can has, unless switched off.
+        # Two cans: the "-" can is sorted into the "+" can's items first,
+        # so both sides are split alike. Then every item either side has,
+        # unless switched off.
         open_can "$minus_can" "$CC_TMP/can-minus"
         local minus_home="${MAN[can.home]}"
-        minus_label="Can $(show_id "${MAN[can.id]}")${MAN[can.label]:+ (label: ${MAN[can.label]})}"
+        m_id="${MAN[can.id]}"
+        minus_label="Can $(show_id "$m_id")${MAN[can.label]:+ (label: ${MAN[can.label]})}"
         notes="$(versions_between "$p_id" "$p_rel" "$p_ed" "$p_cin" "$p_arch")"
         notes_title="The two cans were made on different versions:"
+        resplit_tree "$CC_TMP/can-minus" "$CC_TMP/can-minus-split" "$CC_TMP/can-plus"
         CMP_ITEMS=()
-        for n in $( { ls "$CC_TMP/can-minus/items" "$CC_TMP/can-plus/items" 2>/dev/null || true; } | sort -u); do
+        for n in "${ITEM_NAMES[@]}"; do
+            [ -d "$CC_TMP/can-minus-split/items/$n" ] || [ -d "$CC_TMP/can-plus/items/$n" ] || continue
             [ "${CONF_ITEMS[$n]:-yes}" = "no" ] || CMP_ITEMS+=("$n")
         done
-        prepare_view "$CC_TMP/can-minus" "$minus_home" "$CMP_MINUS" 0 "${CMP_ITEMS[@]}"
+        prepare_view "$CC_TMP/can-minus-split" "$minus_home" "$CMP_MINUS" 0 "${CMP_ITEMS[@]}"
         prepare_view "$CC_TMP/can-plus" "$plus_home" "$CMP_PLUS" 0 "${CMP_ITEMS[@]}"
     fi
 
@@ -90,6 +99,8 @@ build_comparison() {
         # The two sides, with the same "-" and "+" as the lines below.
         info "Comparing:" "${C_RED}(-)${C_RESET} $minus_label" "${C_GREEN}(+)${C_RESET} $plus_label"
         show_version_notes "$notes" "$notes_title"
+        # Two cans only: what could not be compared (see resplit_tree).
+        [ -z "$m_id" ] || show_left_out "$CC_TMP/left-out.txt" "$m_id" "$p_id"
         render_diff
         check_refs "$CMP_PLUS" > "$CC_TMP/refs.txt"
         show_missing "$CC_TMP/refs.txt" "$CMP_PLUS"
@@ -102,6 +113,126 @@ build_comparison() {
 # ---------------------------------------------------------------------------
 # Views
 # ---------------------------------------------------------------------------
+
+# resplit_tree SRC OUT PLUS -> the can unpacked in SRC, sorted into items
+#   again by the items loaded now (the catalog of the "+" can, which is
+#   unpacked in PLUS), the same way "seal" sorts this computer. Each can
+#   was split by its own catalog when it was made; without this, a setting
+#   that one can keeps in your own item and the other in "app-settings"
+#   would show up twice.
+#   A file that no item takes now cannot be compared. It is not dropped
+#   silently: $CC_TMP/left-out.txt gets a line "item it was in<TAB>path"
+#   for the warning on top of the report (show_left_out). Settings always
+#   find an item (the catch-alls), and what an item excludes now is left
+#   out on purpose, just as when this computer is read.
+resplit_tree() {
+    local src="$1" out="$2" plus="$3" n f rel owner kind from split="$CC_TMP/resplit"
+    local left="$CC_TMP/left-out.txt"
+    local -a takers
+    rm -rf "$out" "$split"; mkdir -p "$out/items" "$split"; : > "$left"
+
+    # Settings: all of them together, sorted again (lib/dconf.awk).
+    { for f in "$src"/items/*/dconf.ini; do [ -f "$f" ] && awk 1 "$f"; done; true; } > "$split.ini"
+    write_dconf_patterns "$split-dconf.txt"
+    awk -f "$CC_ROOT/lib/dconf.awk" -v outdir="$split" -v want="${ITEM_NAMES[*]}" "$split-dconf.txt" "$split.ini"
+    for f in "$split"/*.ini; do
+        [ -f "$f" ] || continue
+        n="$(basename "$f" .ini)"
+        mkdir -p "$out/items/$n"; mv "$f" "$out/items/$n/dconf.ini"
+    done
+
+    # Files in the home folder, listed as "item it is in<TAB>path below
+    # home"; then who owns each path now (lib/files.awk).
+    { find "$src/items" -path "$src/items/*/home/*" \( -type f -o -type l \) 2>/dev/null || true; } \
+        | awk -v root="$src/items/" '{ p = substr($0, length(root) + 1); i = index(p, "/")
+                                       print substr(p, 1, i - 1) "\t" substr(p, i + 6) }' > "$split-files.txt"
+    awk -F'\t' -v h="$HOME" '{ print h "/" $2 }' "$split-files.txt" | sort -u > "$split-paths.txt"
+    write_file_patterns "$split-patterns.txt"
+    awk -f "$CC_ROOT/lib/files.awk" "$split-patterns.txt" "$split-paths.txt" > "$split-owners.txt"
+    # The same without the "exclude" lines: a path found here but not
+    # above is one its item leaves out on purpose; a path found in neither
+    # belongs to no item.
+    { grep '^inc' "$split-patterns.txt" || true; } > "$split-inc.txt"
+    awk -f "$CC_ROOT/lib/files.awk" "$split-inc.txt" "$split-paths.txt" > "$split-claimed.txt"
+    # -> "item it is in<TAB>item it goes to<TAB>path" for every file kept.
+    awk -F'\t' -v h="$HOME/" -v own="$split-owners.txt" -v claimed="$split-claimed.txt" -v left="$left" '
+        FILENAME == own     { owner[substr($2, length(h) + 1)] = $1; next }
+        FILENAME == claimed { taken[substr($2, length(h) + 1)] = 1; next }
+        $2 in owner         { print $1 "\t" owner[$2] "\t" $2; next }
+        !($2 in taken)      { print $1 "\t~/" $2 >> left }
+    ' "$split-owners.txt" "$split-claimed.txt" "$split-files.txt" > "$split-moves.txt"
+    # Copied in one go per pair of items (file by file is slow with
+    # thousands of theme files), keeping symlinks, permissions and times.
+    cut -f1,2 "$split-moves.txt" | sort -u | while IFS=$'\t' read -r n owner; do
+        awk -F'\t' -v s="$n" -v o="$owner" '$1 == s && $2 == o { print $3 }' "$split-moves.txt" > "$split-list.txt"
+        mkdir -p "$out/items/$owner/home"
+        tar -C "$src/items/$n/home" --no-recursion --verbatim-files-from -cf - -T "$split-list.txt" \
+            | tar -C "$out/items/$owner/home" -xf -
+    done
+
+    # System files: to the items that list them under "system".
+    { find "$src/items" -path "$src/items/*/root/*" -type f 2>/dev/null || true; } | while IFS= read -r f; do
+        rel="${f#"$src"/items/*/root}"
+        takers=()
+        for n in "${ITEM_NAMES[@]}"; do
+            split_words "${ITEM_SYSTEM[$n]:-}" | grep -qxF -- "$rel" && takers+=("$n")
+        done
+        if [ "${#takers[@]}" -eq 0 ]; then
+            n="${f#"$src"/items/}"
+            printf '%s\t%s\n' "${n%%/*}" "$rel" >> "$left"
+            continue
+        fi
+        while IFS= read -r n; do
+            mkdir -p "$(dirname "$out/items/$n/root$rel")"
+            cp -a "$f" "$out/items/$n/root$rel"
+        done < <(resplit_takers "$plus" "${takers[@]}")
+    done
+
+    # The wallpaper, language, time zone, software list and crontab: to the
+    # items that take that kind ("special") now.
+    for kind in wallpaper language timezone software crontab; do
+        from="$( { compgen -G "$src/items/*/$kind.txt" || true; } | head -n 1)"
+        [ -n "$from" ] || continue
+        takers=()
+        for n in "${ITEM_NAMES[@]}"; do item_has "$n" "$kind" && takers+=("$n"); done
+        while IFS= read -r n; do
+            mkdir -p "$out/items/$n"
+            cp -a "$from" "$out/items/$n/"
+            [ "$kind" != "wallpaper" ] || [ ! -d "${from%/*}/wallpaper" ] || cp -a "${from%/*}/wallpaper" "$out/items/$n/"
+        done < <(resplit_takers "$plus" "${takers[@]+"${takers[@]}"}")
+    done
+}
+
+# resplit_takers PLUS ITEM... -> which of the ITEMs get a system file or a
+#   special that all of them name. "seal" gives a copy to every such item
+#   that is switched on, so here it goes to each one the "+" can holds
+#   (those were on when it was made): then the two sides line up. If the
+#   "+" can holds none of them, the first one gets it, so it shows once.
+resplit_takers() {
+    local plus="$1" n found=0; shift
+    for n in "$@"; do
+        [ -d "$plus/items/$n" ] || continue
+        printf '%s\n' "$n"; found=1
+    done
+    [ "$found" -eq 1 ] || [ $# -eq 0 ] || printf '%s\n' "$1"
+    return 0
+}
+
+# show_left_out FILE MINUS_ID PLUS_ID -> a warning for the files of the "-"
+#   can that no item of the "+" can takes (FILE: see resplit_tree), with
+#   the item each was in. They are not compared, so without this line
+#   "No differences" could be read as "the two cans hold the same".
+show_left_out() {
+    [ -s "$1" ] || return 0
+    local lines=() l
+    while IFS= read -r l; do lines+=("${SUB}$l"); done < <(
+        awk -F'\t' '!($1 in c) { order[++n] = $1 }
+                    { c[$1]++ }
+                    END { for (i = 1; i <= n; i++) print order[i] ": " c[order[i]] " file(s)" }' "$1")
+    msg_lines "$B_WARN" \
+        "Not compared: $(wc -l < "$1") file(s) in can $(show_id "$2") that no item of can $(show_id "$3") takes:" \
+        "${lines[@]}" "To see them, compare the other way round:" "\$ cinnamon-can diff $3 $2"
+}
 
 # prepare_view SRC SRC_HOME OUT FIX_WALLPAPER ITEM...
 prepare_view() {
@@ -407,11 +538,12 @@ change_line() {
 
 # line_counts OLD NEW -> "  (+12 | -0)" for a new text file of 12 lines (each
 #   side is a file, or 0 when that side has none); nothing for a binary
-#   file.
+#   file, and nothing for a link: it has no lines of its own, and what it
+#   points to may not exist on this computer.
 line_counts() {
     local p=0 m=0
-    if [ "$1" != 0 ]; then is_text "$1" || return 0; m="$(wc -l < "$1")"; fi
-    if [ "$2" != 0 ]; then is_text "$2" || return 0; p="$(wc -l < "$2")"; fi
+    if [ "$1" != 0 ]; then [ ! -L "$1" ] && is_text "$1" || return 0; m="$(wc -l < "$1")"; fi
+    if [ "$2" != 0 ]; then [ ! -L "$2" ] && is_text "$2" || return 0; p="$(wc -l < "$2")"; fi
     printf '  %s' "$(line_counts_text "$p" "$m")"
 }
 

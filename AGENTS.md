@@ -98,7 +98,10 @@ LICENSE               MIT
 - **Log** `backup_dir/cinnamon-can.log`: seal and open only, `key=value`.
 - Ownership: the longest matching path of ALL items (also switched-off
   ones) wins, user items win ties; catch-alls `other` and `app-settings`.
-  `diff` and `open` always split both sides with the **can's** catalog.
+  `diff` and `open` always split both sides with the **can's** catalog
+  (of two cans, the "+" can's: `resplit_tree` in `lib/diff.sh`; a file
+  of the "-" can that none of its items takes is not compared, and a
+  warning in the report says so).
 
 ## Screen output
 
