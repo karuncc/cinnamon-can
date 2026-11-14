@@ -92,7 +92,7 @@ fix: retry the export when `rsync` drops the connection
 - wait up to 5 minutes before giving up, since the job starts right after wake
 - log each retry to `logs/export.log`
 
-Assisted-by: Claude Fable 5
+Assisted-by: Claude Opus 5.5
 ```
 
 ## Pull requests
