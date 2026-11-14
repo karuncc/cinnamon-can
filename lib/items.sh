@@ -58,33 +58,59 @@ NEVER_KEEP_DCONF="/org/x/warpinator/preferences/connect-id
 #   Reads every NAME.item file, checks it, and fills the ITEM_* arrays.
 #   Stops with a list of every problem found.
 load_items() {
-    local builtin_dir="$1" user_dir="${2:-}" f problems=0
+    local builtin_dir="$1" user_dir="${2:-}" f
     ITEM_NAMES=() ITEM_SRC=() ITEM_FILE=() ITEM_DESC=() ITEM_DEFAULT=()
     ITEM_DCONF=() ITEM_FILES=() ITEM_EXCLUDE=() ITEM_SYSTEM=() ITEM_SPECIAL=() ITEM_IGNORE=()
+    ITEM_PROBLEMS=()
 
     for f in "$builtin_dir"/*.item; do
         [ -f "$f" ] || continue
-        load_item_file "$f" builtin || problems=$((problems + 1))
+        load_item_file "$f" builtin || true
     done
     if [ -n "$user_dir" ] && [ -d "$user_dir" ]; then
         for f in "$user_dir"/*.item; do
             [ -f "$f" ] || continue
-            load_item_file "$f" user || problems=$((problems + 1))
+            load_item_file "$f" user || true
         done
     fi
-    [ "${#ITEM_NAMES[@]}" -gt 0 ] || die "no items found in $builtin_dir"
-    [ "$problems" -eq 0 ] || die "please fix the item file(s) above"
+    [ "${#ITEM_NAMES[@]}" -gt 0 ] || die "No items found in $(rel_path "$builtin_dir")"
+    [ "${#ITEM_PROBLEMS[@]}" -eq 0 ] || show_item_problems
+}
+
+# item_problem TEXT [LINES] -> notes a problem of the item file being read
+#   ($file in load_item_file), to be shown with all the others at the end.
+ITEM_PROBLEMS=()          # file<TAB>problem, in the order found
+item_problem() {
+    local where=""
+    [ -z "${2:-}" ] || where="L$2: "
+    ITEM_PROBLEMS+=("$(rel_path "$file")"$'\t'"$where$1")
+    bad=1
+}
+
+# show_item_problems -> one error listing every problem, file by file:
+#   ERROR  Invalid item file(s) detected:
+#            └ • config/items/my-bad.item
+#              └ L2: Field "default" must be on or off, not "maybe"
+show_item_problems() {
+    local lines=() last="" p f
+    for p in "${ITEM_PROBLEMS[@]}"; do
+        f="${p%%$'\t'*}"
+        [ "$f" = "$last" ] || { lines+=("${SUB}$(file_dot "$f")"); last="$f"; }
+        lines+=("${SUB2}${p#*$'\t'}")
+    done
+    die "Invalid item file(s) detected:" "${lines[@]}"
 }
 
 # load_item_file FILE SOURCE -> reads one item; returns 1 on any problem.
 load_item_file() {
-    local file="$1" src="$2" name section key value p bad=0
+    local file="$1" src="$2" name section key lines value p bad=0
+    local -A at=()        # field -> the line(s) it is on, for the messages
     name="$(basename "$file" .item)"
     if [[ ! "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
-        err "$file: an item name may only use a-z, 0-9 and \"-\""; return 1
+        item_problem "An item name may only use a-z, 0-9 and \"-\""; return 1
     fi
     if [ -n "${ITEM_SRC[$name]+set}" ]; then
-        err "$file: an item called \"$name\" already exists (${ITEM_FILE[$name]}); please use another name"
+        item_problem "An item called \"$name\" already exists ($(rel_path "${ITEM_FILE[$name]}")); please use another name"
         return 1
     fi
     ITEM_NAMES+=("$name")
@@ -92,49 +118,52 @@ load_item_file() {
     ITEM_DESC[$name]="" ITEM_DCONF[$name]="" ITEM_FILES[$name]="" ITEM_EXCLUDE[$name]=""
     ITEM_SYSTEM[$name]="" ITEM_SPECIAL[$name]="" ITEM_IGNORE[$name]=""
 
-    while IFS=$'\t' read -r section key value; do
-        if [[ "$section" == !* ]]; then err "$file line ${section#!}"; bad=1; continue; fi
+    while IFS=$'\t' read -r section key lines value; do
+        if [[ "$section" == !* ]]; then
+            section="${section#!}"; item_problem "${section#*: }" "${section%%:*}"; continue
+        fi
+        at[$key]="$lines"
         case "$key" in
             description) ITEM_DESC[$name]="$value" ;;
             default)
                 case "$value" in on|off) ITEM_DEFAULT[$name]="$value" ;;
-                    *) err "$file: default must be on or off"; bad=1 ;; esac ;;
+                    *) item_problem "Field \"default\" must be on or off, not \"$value\"" "$lines" ;; esac ;;
             dconf)   ITEM_DCONF[$name]="$value" ;;
             files)   ITEM_FILES[$name]="$value" ;;
             exclude) ITEM_EXCLUDE[$name]="$value" ;;
             system)  ITEM_SYSTEM[$name]="$value" ;;
             special) ITEM_SPECIAL[$name]="$value" ;;
             ignore)  ITEM_IGNORE[$name]="$value" ;;
-            *) err "$file: unknown field \"$key\""; bad=1 ;;
+            *) item_problem "Unknown field \"$key\"" "$lines" ;;
         esac
     done < <(parse_ini "$file" item)
 
-    [ -n "${ITEM_DESC[$name]}" ] || { err "$file: description is missing"; bad=1; }
+    [ -n "${ITEM_DESC[$name]}" ] || item_problem "The description is missing"
     while IFS= read -r p; do
-        valid_dconf_path "$p" || { err "$file: dconf path \"$p\" is not valid"; bad=1; }
+        valid_dconf_path "$p" || item_problem "Settings path \"$p\" in dconf is not valid" "${at[dconf]:-}"
     done < <(split_words "${ITEM_DCONF[$name]}")
     while IFS= read -r p; do
-        valid_home_path "$p" || { err "$file: file \"$p\" must start with ~/ (no ..)"; bad=1; }
+        valid_home_path "$p" || item_problem "File \"$p\" in files must start with ~/ (no ..)" "${at[files]:-}"
     done < <(split_words "${ITEM_FILES[$name]}")
     while IFS= read -r p; do
         valid_home_path "$p" || valid_dconf_path "$p" \
-            || { err "$file: exclude \"$p\" must start with ~/ (a file) or / (a setting)"; bad=1; }
+            || item_problem "Entry \"$p\" in exclude must start with ~/ (a file) or / (a setting)" "${at[exclude]:-}"
     done < <(split_words "${ITEM_EXCLUDE[$name]}")
     while IFS= read -r p; do
         [[ "$p" == /* && "$p" != "$HOME"/* && "/$p/" != */../* ]] \
-            || { err "$file: system file \"$p\" must be a full path outside your home"; bad=1; }
+            || item_problem "System file \"$p\" must be a full path outside your home" "${at[system]:-}"
     done < <(split_words "${ITEM_SYSTEM[$name]}")
     for p in ${ITEM_SPECIAL[$name]}; do
         case "$p" in wallpaper|language|timezone|software|crontab) ;;
-            *) err "$file: unknown special \"$p\""; bad=1 ;; esac
+            *) item_problem "Unknown special \"$p\"" "${at[special]:-}" ;; esac
     done
     while IFS= read -r p; do
         if [[ "$p" == "~/"* ]]; then
             valid_home_path "${p%%:*}" && [[ "$p" == *:?* ]] \
-                || { err "$file: ignore \"$p\" must look like ~/path/file:beginning-of-line"; bad=1; }
+                || item_problem "Entry \"$p\" in ignore must look like ~/path/file:beginning-of-line" "${at[ignore]:-}"
         else
             valid_ignore_setting "$p" \
-                || { err "$file: ignore \"$p\" is not a setting (/a/b/c, /a/b/, /a/b/c*, */name, */name*, */*name) or a file line (~/file:beginning)"; bad=1; }
+                || item_problem "Entry \"$p\" in ignore is not a setting (/a/b/c, /a/b/, /a/b/c*, */name, */name*, */*name) or a file line (~/file:beginning)" "${at[ignore]:-}"
         fi
     done < <(split_words "${ITEM_IGNORE[$name]}")
     [ "$bad" -eq 0 ]
@@ -161,14 +190,12 @@ valid_home_path() { [[ "$1" == "~/"?* && "/$1/" != */../* ]]; }
 
 # check_config_items -> every name in the config's [items] must exist.
 check_config_items() {
-    local name problems=0
+    local name problems=()
     for name in "${!CONF_ITEMS[@]}"; do
-        if [ -z "${ITEM_SRC[$name]+set}" ]; then
-            err "$CONF_FILE: [items] unknown item \"$name\" (see items/ and $(to_tilde "$USER_ITEMS_DIR"))"
-            problems=$((problems + 1))
-        fi
+        [ -n "${ITEM_SRC[$name]+set}" ] \
+            || problems+=("${SUB2}L${CONF_ITEM_LINES[$name]:-?}: Unknown item \"$name\" (see items/ and $(rel_path "$USER_ITEMS_DIR")/)")
     done
-    [ "$problems" -eq 0 ] || exit 1
+    [ "${#problems[@]}" -eq 0 ] || config_problems "${problems[@]}"
 }
 
 # item_on NAME -> success if the item is switched on (config, else default).
@@ -188,7 +215,7 @@ items_on() {
 item_has() { [[ " ${ITEM_SPECIAL[$1]:-} " == *" $2 "* ]]; }
 
 # is_main_item NAME -> built-in and on by default; everything else (your
-#   own items, optional items) is "extra" and shown separately in a diff.
+#   own items, optional items) comes last in a diff, marked as such.
 is_main_item() { [ "${ITEM_SRC[$1]:-}" = "builtin" ] && [ "${ITEM_DEFAULT[$1]:-}" = "on" ]; }
 
 # items_in_order -> your own items first (they win ties), then built-in.

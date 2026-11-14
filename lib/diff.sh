@@ -13,8 +13,8 @@
 #      differs becomes one line in a result list.
 #   3. The result is shown like "git diff": per item, settings first,
 #      then files. Settings a side does not have are "(default)".
-#      Optional items and your own items come in a separate "Extra" part,
-#      and what this computer lacks comes last ("Missing on this computer").
+#      Optional items and your own items come last, marked as such, and
+#      after them what the can uses that this computer has not installed.
 
 # shellcheck source=lib/collect.sh
 source "$CC_ROOT/lib/collect.sh"
@@ -24,7 +24,7 @@ source "$CC_ROOT/lib/list.sh"
 WALLPAPER_COPY_DIR=".local/share/backgrounds/cinnamon-can"
 
 cmd_diff() {
-    [ $# -ge 1 ] && [ $# -le 2 ] || die "usage: cinnamon-can diff CAN [CAN2]"
+    [ $# -ge 1 ] && [ $# -le 2 ] || die "Usage: cinnamon-can diff CAN [CAN2]"
     make_tmpdir
     build_comparison "$@"
     show_paged "$CMP_REPORT"
@@ -38,7 +38,7 @@ CMP_ITEMS=()
 
 # build_comparison CAN [CAN2]
 build_comparison() {
-    local plus_can minus_can="" minus_label notes n
+    local plus_can minus_can="" minus_label notes n notes_title="Differs from this computer:"
     plus_can="$(resolve_can "${2:-$1}")" || exit 1
     [ $# -eq 1 ] || { minus_can="$(resolve_can "$1")" || exit 1; }
 
@@ -49,8 +49,11 @@ build_comparison() {
     open_can "$plus_can" "$CC_TMP/can-plus"
     CMP_PLUS_ID="${MAN[can.id]}"
     local plus_home="${MAN[can.home]}" plus_label
-    plus_label="can ${MAN[can.id]}${MAN[can.label]:+ \"${MAN[can.label]}\"}"
+    plus_label="Can $(show_id "${MAN[can.id]}")${MAN[can.label]:+ (label: ${MAN[can.label]})}"
     notes="$(version_notes)"
+    # Kept for a second can, whose manifest replaces MAN below.
+    local p_id="${MAN[can.id]}" p_rel="${MAN[can.mint_release]:-?}" p_ed="${MAN[can.mint_edition]:-?}"
+    local p_cin="${MAN[can.cinnamon_version]:-?}" p_arch="${MAN[can.arch]:-?}"
     keep_own_ignore     # before the can's items replace this computer's
     load_items "$CC_TMP/can-plus/catalog/builtin" "$CC_TMP/can-plus/catalog/user"
 
@@ -59,17 +62,18 @@ build_comparison() {
         # config, or by the can's defaults) and present in the can.
         CMP_ITEMS=()
         for n in $(tree_items "$CC_TMP/can-plus"); do item_on "$n" && CMP_ITEMS+=("$n"); done
-        [ "${#CMP_ITEMS[@]}" -gt 0 ] || die "nothing to compare: every item of this can is switched off"
-        info "reading this computer ..."
+        [ "${#CMP_ITEMS[@]}" -gt 0 ] || die "Nothing to compare: every item of this can is switched off"
+        info "Reading this computer's settings ..."
         collect_tree "$CMP_MINUS" "${CMP_ITEMS[@]}"
         prepare_view "$CC_TMP/can-plus" "$plus_home" "$CMP_PLUS" 1 "${CMP_ITEMS[@]}"
-        minus_label="this computer"
+        minus_label="This computer"
     else
         # Two cans: every item either can has, unless switched off.
         open_can "$minus_can" "$CC_TMP/can-minus"
         local minus_home="${MAN[can.home]}"
-        minus_label="can ${MAN[can.id]}${MAN[can.label]:+ \"${MAN[can.label]}\"}"
-        notes=""
+        minus_label="Can $(show_id "${MAN[can.id]}")${MAN[can.label]:+ (label: ${MAN[can.label]})}"
+        notes="$(versions_between "$p_id" "$p_rel" "$p_ed" "$p_cin" "$p_arch")"
+        notes_title="The two cans were made on different versions:"
         CMP_ITEMS=()
         for n in $( { ls "$CC_TMP/can-minus/items" "$CC_TMP/can-plus/items" 2>/dev/null || true; } | sort -u); do
             [ "${CONF_ITEMS[$n]:-yes}" = "no" ] || CMP_ITEMS+=("$n")
@@ -83,12 +87,10 @@ build_comparison() {
     CMP_SYSTEM="$(awk -F'\t' '$2 == "system" || $3 == "(time zone)"' "$CMP_RESULT" | wc -l)"
 
     {
-        say "Comparing ${C_RED}- $minus_label${C_RESET} with ${C_GREEN}+ $plus_label${C_RESET}"
-        if [ -n "$notes" ]; then
-            printf '%s\n' "$notes" | sed "s/^/${C_YELLOW}Warning:${C_RESET} /"
-        fi
+        # The two sides, with the same "-" and "+" as the lines below.
+        info "Comparing:" "${C_RED}(-)${C_RESET} $minus_label" "${C_GREEN}(+)${C_RESET} $plus_label"
+        show_version_notes "$notes" "$notes_title"
         render_diff
-        title "== Missing on this computer"
         check_refs "$CMP_PLUS" > "$CC_TMP/refs.txt"
         show_missing "$CC_TMP/refs.txt" "$CMP_PLUS"
         say ""
@@ -277,11 +279,15 @@ ignore_rules_for() {
         "$CC_TMP/ignore-rules.txt" 2>/dev/null
 }
 
-# without_ignored FILE BEGINNINGS -> FILE without the lines that start with
-#   one of the BEGINNINGS (one per line in that file).
+# without_ignored FILE BEGINNINGS [MAP] -> FILE without the lines that start
+#   with one of the BEGINNINGS (one per line in that file). With MAP, the
+#   real line number of every line kept is written there, one per line.
 without_ignored() {
-    awk 'FNR == NR { b[++n] = $0; next }
-         { for (i = 1; i <= n; i++) if (index($0, b[i]) == 1) next; print }' "$2" "$1"
+    awk -v map="${3:-}" 'FNR == NR { b[++n] = $0; next }
+         { for (i = 1; i <= n; i++) if (index($0, b[i]) == 1) next
+           if (map != "") print FNR > map
+           print }
+         END { if (map != "") close(map) }   # written before diff reads the end' "$2" "$1"
 }
 
 
@@ -299,6 +305,23 @@ show_path() {
     esac
 }
 
+# The report shows each item as a heading, and under it one entry per
+# setting or file that differs (a file with a yellow dot):
+#
+#          appearance
+#          └ /org/cinnamon/desktop/interface/font-name
+#        -     'Waree 11'
+#        +     'Ubuntu 11'
+#          └ • ~/.config/cinnamon/spices/calendar@cinnamon.org/13.json  (+1 | -1)
+#            10  "tooltip": "Check this to display events in the calendar.",
+#        -   11  "value": true
+#        +   11  "value": false
+#      NEW └ • ~/.config/cinnamon/spices/calendar@cinnamon.org/99.json  (+3 | -0)
+#
+# The "-" side is this computer (or the first can), the "+" side the can.
+# Lines of a file carry their line number in grey; "⋯" marks lines left
+# out between two changed parts. What needs sudo is marked SUDO REQUIRED.
+
 render_diff() {
     local n
     local -a main=() extra=()
@@ -309,69 +332,129 @@ render_diff() {
     if [ "${#main[@]}" -eq 0 ] && [ "${#extra[@]}" -eq 0 ]; then
         say ""; say "No differences."; return 0
     fi
-    for n in "${main[@]+"${main[@]}"}"; do render_item "$n"; done
-    if [ "${#extra[@]}" -gt 0 ]; then
-        say ""; say "${C_BOLD}== Extra (optional and your own items) ==${C_RESET}"
-        for n in "${extra[@]}"; do render_item "$n"; done
-    fi
+    # The usual items first, then the optional ones and your own, each
+    # with a grey note after its name.
+    for n in "${main[@]+"${main[@]}"}" "${extra[@]+"${extra[@]}"}"; do render_item "$n"; done
+}
+
+# item_note ITEM -> " (optional item)" or " (your own item)" in grey;
+#   nothing for an item that is on by default.
+item_note() {
+    if [ "${ITEM_SRC[$1]:-}" = "user" ]; then printf ' %s(your own item)%s' "$C_GREY" "$C_RESET"
+    elif ! is_main_item "$1"; then printf ' %s(optional item)%s' "$C_GREY" "$C_RESET"; fi
 }
 
 # render_item ITEM -> the differences of one item: settings, then files.
 render_item() {
-    local n="$1" result="$CC_TMP/item-result.txt" it kind path state va vb a b label tag
+    local n="$1" result="$CC_TMP/item-result.txt" body="$CC_TMP/item-body.txt"
+    local it kind path state va vb a b label tag ma mb p m
     # Settings first, then files, the crontab, and system files last.
     awk -F'\t' -v i="$n" '$1 == i {
         o = ($2 == "setting") ? 1 : ($2 == "file") ? 2 : ($2 == "crontab") ? 3 : 4
         print o "\t" $0 }' "$CMP_RESULT" | sort -t$'\t' -k1,1n -k4,4 | cut -f2- > "$result"
-    title "== $n"
+    say ""
+    say "${C_BOLD}$n${C_RESET}$(item_note "$n")"
     while IFS=$'\t' read -r it kind path state va vb; do
         tag=""
-        [ "$kind" = "system" ] || [ "$path" = "(time zone)" ] && tag="  ${C_YELLOW}[sudo]${C_RESET}"
+        [ "$kind" != "system" ] && [ "$path" != "(time zone)" ] || tag=" $B_SUDO"
         if [ "$kind" = "setting" ]; then
-            say "${C_BOLD}--- $path${C_RESET}$tag"
-            say "${C_RED}-$va${C_RESET}"
-            say "${C_GREEN}+$vb${C_RESET}"
+            say "${SUB}$path$tag"
+            change_line - "$(value_word "$va")"
+            change_line + "$(value_word "$vb")"
             continue
         fi
-        label="$(show_path "$kind" "$path")"
+        label="$(file_dot "$(show_path "$kind" "$path")")$tag"
         a="$CMP_MINUS/items/$n/$path"; b="$CMP_PLUS/items/$n/$path"
         case "$state" in
-            added)   say "${C_BOLD}--- $label${C_RESET}$tag  ${C_GREEN}(new file)${C_RESET}" ;;
-            removed) say "${C_BOLD}--- $label${C_RESET}$tag  ${C_RED}(deleted)${C_RESET}" ;;
+            added)   printf '%s%s%s%s\n' "$B_NEW" "$SUB" "$label" "$(line_counts 0 "$b")" ;;
+            removed) printf '%s%s%s%s\n' "$B_DEL" "$SUB" "$label" "$(line_counts "$a" 0)" ;;
             changed)
-                say "${C_BOLD}--- $label${C_RESET}$tag"
                 if [ -L "$a" ] || [ -L "$b" ]; then
-                    say "${C_RED}-link to $(readlink "$a" 2>/dev/null || echo '(not a link)')${C_RESET}"
-                    say "${C_GREEN}+link to $(readlink "$b" 2>/dev/null || echo '(not a link)')${C_RESET}"
+                    say "${SUB}$label"
+                    change_line - "link to $(readlink "$a" 2>/dev/null || echo '(not a link)')"
+                    change_line + "link to $(readlink "$b" 2>/dev/null || echo '(not a link)')"
                 elif is_text "$a" && is_text "$b"; then
+                    ma="" mb=""
                     if ignore_rules_for "$n" "$path" > "$CC_TMP/ignore-now.txt"; then
-                        { diff -u <(without_ignored "$a" "$CC_TMP/ignore-now.txt") \
-                                  <(without_ignored "$b" "$CC_TMP/ignore-now.txt") || true; } | tail -n +3 | color_diff
+                        # Ignored lines are left out, but every line keeps
+                        # its real number (ma/mb: shown line -> real line).
+                        ma="$CC_TMP/map-a.txt" mb="$CC_TMP/map-b.txt"
+                        : > "$ma"; : > "$mb"
+                        { diff -u <(without_ignored "$a" "$CC_TMP/ignore-now.txt" "$ma") \
+                                  <(without_ignored "$b" "$CC_TMP/ignore-now.txt" "$mb") || true; } > "$body"
                     else
-                        { diff -u "$a" "$b" || true; } | tail -n +3 | color_diff
+                        { diff -u "$a" "$b" || true; } > "$body"
                     fi
+                    p="$(awk 'NR > 2 && /^\+/' "$body" | wc -l)"
+                    m="$(awk 'NR > 2 && /^-/' "$body" | wc -l)"
+                    say "${SUB}$label  $(line_counts_text "$p" "$m")"
+                    tail -n +3 "$body" | diff_body "$ma" "$mb"
                 else
-                    say "  (binary file differs)"
+                    say "${SUB}$label"
+                    say "  ${C_GREY}(binary file differs)${C_RESET}"
                 fi ;;
         esac
     done < "$result"
 }
 
-# color_diff -> colours the body of a "diff -u".
-color_diff() {
-    if [ -n "$C_RESET" ]; then
-        sed -e "s/^-.*/${C_RED}&${C_RESET}/" -e "s/^+.*/${C_GREEN}&${C_RESET}/" -e "s/^@@.*/${C_DIM}&${C_RESET}/"
-    else
-        cat
-    fi
+# change_line -|+ TEXT -> one changed value, with its badge in the left
+#   column (no line number: settings have none).
+change_line() {
+    local badge="$B_MINUS" colour="$C_RED"
+    [ "$1" = "-" ] || { badge="$B_PLUS"; colour="$C_GREEN"; }
+    printf '     %s   %s%s%s\n' "$badge" "$colour" "$2" "$C_RESET"
 }
 
+# line_counts OLD NEW -> "  (+12 | -0)" for a new text file of 12 lines (each
+#   side is a file, or 0 when that side has none); nothing for a binary
+#   file.
+line_counts() {
+    local p=0 m=0
+    if [ "$1" != 0 ]; then is_text "$1" || return 0; m="$(wc -l < "$1")"; fi
+    if [ "$2" != 0 ]; then is_text "$2" || return 0; p="$(wc -l < "$2")"; fi
+    printf '  %s' "$(line_counts_text "$p" "$m")"
+}
+
+# diff_body [MAP_A MAP_B] -> the body of a "diff -u" (read from the input,
+#   without its first 2 lines): every changed line with a "-"/"+" badge in
+#   the left column; in the right column the line number in grey, then
+#   the text. The MAPs turn
+#   a shown line number into the real one (when lines were left out).
+diff_body() {
+    awk -v ma="${1:-}" -v mb="${2:-}" -v grey="$C_GREY" -v red="$C_RED" -v green="$C_GREEN" \
+        -v off="$C_RESET" -v bm="$B_MINUS" -v bp="$B_PLUS" '
+        BEGIN { if (ma != "") while ((getline l < ma) > 0) A[++na] = l
+                if (mb != "") while ((getline l < mb) > 0) B[++nb] = l }
+        function real_a(n) { return (ma != "" && n in A) ? A[n] : n }
+        function real_b(n) { return (mb != "" && n in B) ? B[n] : n }
+        /^@@/ { o = substr($2, 2) + 0; n = substr($3, 2) + 0
+                if (hunks++) printf "            %s⋯%s\n", grey, off
+                next }
+        /^\\/ { printf "               %s%s%s\n", grey, substr($0, 3), off; next }
+        { c = substr($0, 1, 1); t = substr($0, 2) }
+        c == "-" { printf "     %s %s%4s%s  %s%s%s\n", bm, grey, real_a(o), off, red, t, off; o++; next }
+        c == "+" { printf "     %s %s%4s%s  %s%s%s\n", bp, grey, real_b(n), off, green, t, off; n++; next }
+                 { printf "         %s%4s%s  %s\n", grey, real_b(n), off, t; o++; n++ }'
+}
+
+# summary_line -> what differs, one row per kind, with a coloured dot:
+#   green = nothing, yellow = differs, orange = needs sudo, red = missing.
 summary_line() {
-    local s f y
+    local s f y m
     # The time zone needs sudo, so it counts as a system change here --
-    # the same way the [sudo] marks and the "open" messages count it.
+    # the same way its SUDO REQUIRED mark and the "open" messages do.
     s="$(awk -F'\t' '$2 == "setting" && $3 != "(time zone)"' "$CMP_RESULT" | wc -l)"
     f="$(awk -F'\t' '$2 == "file" || $2 == "crontab"' "$CMP_RESULT" | wc -l)"
     y="$(awk -F'\t' '$2 == "system" || $3 == "(time zone)"' "$CMP_RESULT" | wc -l)"
-    say "${C_BOLD}Summary:${C_RESET} $s setting(s), $f file(s), $y system change(s) differ; $(wc -l < "$CC_TMP/refs.txt") thing(s) missing"
+    m="$(wc -l < "$CC_TMP/refs.txt")"
+    info "Summary of the comparison above:" \
+        "${SUB}$(status_dot "$s" "$C_YELLOW") $s setting(s) differ" \
+        "${SUB}$(status_dot "$f" "$C_YELLOW") $f file(s) differ" \
+        "${SUB}$(status_dot "$y" "$C_ORANGE") $y system change(s) differ (only with sudo)" \
+        "${SUB}$(status_dot "$m" "$C_RED") $m thing(s) used by the can but not installed here (listed above)"
+}
+
+# status_dot COUNT COLOUR -> a green dot for 0, else a dot in COLOUR.
+status_dot() {
+    if [ "$1" -eq 0 ]; then printf '%s●%s' "$C_GREEN" "$C_RESET"; else printf '%s●%s' "$2" "$C_RESET"; fi
 }

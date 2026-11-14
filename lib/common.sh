@@ -19,19 +19,147 @@
 # Colours are used only when the output goes straight to a terminal, never
 # when it is saved to a file or piped into another program.
 
-C_RED="" C_GREEN="" C_YELLOW="" C_BLUE="" C_BOLD="" C_DIM="" C_RESET=""
+C_RED="" C_GREEN="" C_YELLOW="" C_BOLD="" C_GREY="" C_RESET=""
+CC_COLS=""
 if [ -t 1 ]; then
     C_RED=$'\e[31m' C_GREEN=$'\e[32m' C_YELLOW=$'\e[33m'
-    C_BLUE=$'\e[34m' C_BOLD=$'\e[1m' C_DIM=$'\e[2m' C_RESET=$'\e[0m'
+    C_BOLD=$'\e[1m' C_GREY=$'\e[90m' C_RESET=$'\e[0m'
+    # The width of the terminal, for lines that must fit on one screen line.
+    CC_COLS="$(stty size </dev/tty 2>/dev/null | cut -d" " -f2)" || true
 fi
 
-say()   { printf '%s\n' "$*"; }                                         # plain line
-title() { printf '\n%s%s%s\n' "$C_BOLD" "$*" "$C_RESET"; }              # heading
-info()  { printf '%s==>%s %s\n' "$C_BLUE" "$C_RESET" "$*"; }            # progress
-ok()    { printf '%s ok %s %s\n' "$C_GREEN" "$C_RESET" "$*"; }          # success
-warn()  { printf '%swarning:%s %s\n' "$C_YELLOW" "$C_RESET" "$*" >&2; } # notice
-err()   { printf '%serror:%s %s\n' "$C_RED" "$C_RESET" "$*" >&2; }      # problem
+# The screen has two columns. The left one (9 characters) holds a status
+# badge or stays empty; everything else starts in the right one:
+#
+#      INFO  Reading this computer's settings ...
+#     ERROR  Invalid config file(s) detected:
+#            └ • config/default.conf
+#              └ L3: Expected "name = value", got: not a setting line
+#            Run "cinnamon-can help" for the commands.
+#
+# In a terminal a badge is a coloured block; otherwise (a pipe, a file) the
+# same word without colour, so both look alike.
+if [ -t 1 ]; then
+    B_INFO=$'\e[1;97;44m'"   INFO "$'\e[0m'" "     # white on blue
+    B_OK=$'\e[1;30;42m'"     OK "$'\e[0m'" "       # black on green
+    B_WARN=$'\e[1;30;43m'"   WARN "$'\e[0m'" "     # black on yellow
+    B_ERROR=$'\e[1;97;41m'"  ERROR "$'\e[0m'" "    # white on red
+else
+    B_INFO="   INFO  " B_OK="     OK  " B_WARN="   WARN  " B_ERROR="  ERROR  "
+fi
+MSG_INDENT="         "
+
+# Other marks in the left column:
+#   a command for you to type gets a grey "$" there, so the command itself
+#   starts in the right column and can be copied as it is:
+#          $ cinnamon-can seal
+#   (every message line that starts with "$ " is shown this way);
+#   a changed line of a comparison gets a "-" or "+" block (B_MINUS /
+#   B_PLUS); a file that is new or deleted gets NEW or DEL (placed like
+#   the status badges).
+CMD_COL="       ${C_GREY}\$${C_RESET} "
+if [ -t 1 ]; then
+    B_MINUS=$'\e[1;97;41m'" - "$'\e[0m'                      # white on red
+    B_PLUS=$'\e[1;30;42m'" + "$'\e[0m'                       # black on green
+    B_NEW="   "$'\e[1;30;42m'" NEW "$'\e[0m'" "
+    B_DEL="   "$'\e[1;97;41m'" DEL "$'\e[0m'" "
+    C_ORANGE=$'\e[38;5;208m'
+else
+    B_MINUS=" - " B_PLUS=" + " B_NEW="     NEW " B_DEL="     DEL " C_ORANGE=""
+fi
+# After a name: what only "sudo cinnamon-can open" can change (orange text).
+B_SUDO="${C_ORANGE}[SUDO REQUIRED]${C_RESET}"
+
+# value_word TEXT -> TEXT, but "(default)" (a setting that was never
+#   changed) in grey, so it does not read like a value.
+value_word() {
+    if [ "$1" = "(default)" ]; then printf '%s(default)%s' "$C_GREY" "$C_RESET"
+    else printf '%s' "$1"; fi
+}
+
+# line_counts_text PLUS MINUS -> "(+3 | -1)" for the lines a file gains
+#   and loses: the numbers green and red in a terminal, grey when 0.
+line_counts_text() {
+    local p="$C_GREEN" m="$C_RED"
+    [ "$1" -gt 0 ] || p="$C_GREY"; [ "$2" -gt 0 ] || m="$C_GREY"
+    printf '(%s+%s%s | %s-%s%s)' "$p" "$1" "$C_RESET" "$m" "$2" "$C_RESET"
+}
+
+# A line that belongs to the line above it starts with a grey "└":
+#   SUB  for the first level, SUB2 for a line under such a line.
+SUB="${C_GREY}└${C_RESET} "
+SUB2="  ${C_GREY}└${C_RESET} "
+
+# say LINE -> one line in the right column ("$ command": see CMD_COL).
+say() {
+    case "$*" in
+        "")     printf '\n' ;;
+        "\$ "*) printf '%s%s\n' "$CMD_COL" "${*#"\$ "}" ;;
+        *)      printf '%s%s\n' "$MSG_INDENT" "$*" ;;
+    esac
+}
+
+# The four kinds of status message. Each argument is one line: the first
+# follows the badge, the others start under it, in the right column.
+info()  { msg_lines "$B_INFO" "$@"; }                                   # progress, notes
+ok()    { msg_lines "$B_OK" "$@"; }                                     # success
+warn()  { msg_lines "$B_WARN" "$@" >&2; }                               # notice
+err()   { msg_lines "$B_ERROR" "$@" >&2; }                              # problem
 die()   { err "$@"; exit 1; }                                           # stop now
+
+# msg_lines PREFIX FIRST [MORE ...] -> PREFIX FIRST, then each MORE indented.
+msg_lines() {
+    local prefix="$1" line; shift
+    printf '%s%s\n' "$prefix" "${1:-}"; shift || true
+    for line in "$@"; do say "$line"; done
+}
+
+# show_id ID -> a can's ID made easy to spot: on a grey block in a terminal,
+#   in [brackets] otherwise. Both are 2 characters wider than the ID.
+#   (Not used inside commands you may copy.)
+show_id() {
+    if [ -n "$C_RESET" ]; then printf '%s %s %s' $'\e[1;97;100m' "$1" "$C_RESET"
+    else printf '[%s]' "$1"; fi
+}
+
+# table_head WIDTH TEXT [WIDTH TEXT ...] -> a table's heading row, in grey.
+#   A table sits under a message, and each row starts with "└ " (ROW);
+#   the headings are moved by the same 2 spaces so they stand over their
+#   columns. A negative WIDTH puts the text on the right (for numbers).
+table_head() {
+    local w t cell row="" n pad
+    while [ $# -ge 2 ]; do
+        w="$1" t="$2"; shift 2
+        # Count characters, not bytes ("•" is one character but 3 bytes).
+        n="$(printf '%s' "$t" | LC_ALL=C tr -d '\200-\277' | wc -c)"
+        pad="$(printf '%*s' $(( ${w#-} > n ? ${w#-} - n : 0 )) '')"
+        if [ "$w" -lt 0 ]; then cell="$pad$t"; else cell="$t$pad"; fi
+        row+="$cell "
+    done
+    row="${row% }"
+    printf '%s  %s%s%s\n' "$MSG_INDENT" "$C_GREY" "${row%"${row##*[! ]}"}" "$C_RESET"
+}
+ROW="$MSG_INDENT$SUB"     # the start of a table row
+
+# file_dot NAME -> a file name in a list, with a yellow dot in front so the
+#   eye finds the files among the lines under them.
+file_dot() { printf '%s•%s %s' "$C_YELLOW" "$C_RESET" "$1"; }
+
+# screen_width -> how many characters fit on one line: the terminal's
+#   width (read at start-up), or 80 when the output is not a terminal.
+screen_width() {
+    local w="${CC_COLS:-}"
+    [[ "$w" =~ ^[0-9]+$ ]] && [ "$w" -ge 40 ] || w=80
+    printf '%s\n' "$w"
+}
+
+# fit_end TEXT ROOM -> TEXT as it is when it fits in ROOM characters, else
+#   only its end with "…" in front (for long paths: the file name stays).
+#   Without a terminal the text is never cut, so nothing is lost in a file.
+fit_end() {
+    if [ -n "$C_RESET" ] && [ "${#1}" -gt "$2" ]; then printf '…%s' "${1: -$(( $2 - 1 ))}"
+    else printf '%s' "$1"; fi
+}
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +192,7 @@ make_tmpdir() {
     if [ -z "$base" ] || [ ! -d "$base" ] || [ ! -w "$base" ]; then
         base="${TMPDIR:-/tmp}"
     fi
-    CC_TMP="$(mktemp -d "$base/cinnamon-can.XXXXXXXX")" || die "cannot create a temporary folder in $base"
+    CC_TMP="$(mktemp -d "$base/cinnamon-can.XXXXXXXX")" || die "Cannot create a temporary folder in $base"
     chmod 700 "$CC_TMP"
     trap cleanup EXIT
     trap 'exit 130' INT TERM
@@ -85,8 +213,11 @@ forget_partial() {
 # ---------------------------------------------------------------------------
 #
 # parse_ini FILE [DEFAULT_SECTION]
-#   Prints one line per setting:   section<TAB>name<TAB>value
-#   or "!<line>: <problem>" for a line that makes no sense.
+#   Prints one line per setting:   section<TAB>name<TAB>lines<TAB>value
+#   ("lines" is where the setting stands in the file: 3, or 3-4 when its
+#   value goes on over the next line; it comes before the value because a
+#   value can be empty), or "!<line>: <problem>" for a line that makes no
+#   sense.
 #
 #   Rules (the same everywhere):
 #     - lines starting with # or ; are comments
@@ -98,7 +229,7 @@ forget_partial() {
 #   Example file:                      what parse_ini prints:
 #     # my config                      (nothing, a comment)
 #     [general]                        (nothing yet, starts a section)
-#     backup_dir = ~/cans              general<TAB>backup_dir<TAB>~/cans
+#     backup_dir = ~/cans              general<TAB>backup_dir<TAB>3<TAB>~/cans
 #
 #   Written for plain POSIX awk (mawk), which is what Mint ships.
 
@@ -106,23 +237,27 @@ parse_ini() {
     awk -v dflt="${2:-}" '
         function trim(s) { sub(/^[ \t\r]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
         function nocomment(s) { sub(/[ \t]+#.*$/, "", s); return s }
-        function flush() { if (have) print section "\t" name "\t" value; have = 0 }
+        function flush() {
+            if (have) print section "\t" name "\t" (last > first ? first "-" last : first) "\t" value
+            have = 0
+        }
         BEGIN { section = dflt }
         {
             line = trim(nocomment($0))
             if (line == "" || line ~ /^[#;]/) next
             if (have && $0 ~ /^[ \t]/ && line !~ /^\[/) {        # continuation
                 value = (value == "") ? line : value " " line
+                last = NR
                 next
             }
             flush()
             if (line ~ /^\[.*\]$/) { section = trim(substr(line, 2, length(line) - 2)); next }
             eq = index(line, "=")
-            if (eq == 0)       { print "!" NR ": expected \"name = value\", got: " line; next }
-            if (section == "") { print "!" NR ": setting found before any [section]"; next }
+            if (eq == 0)       { print "!" NR ": Expected \"name = value\", got: " line; next }
+            if (section == "") { print "!" NR ": Setting found before any [section]"; next }
             name = trim(substr(line, 1, eq - 1)); value = trim(substr(line, eq + 1))
-            if (name == "")    { print "!" NR ": missing name before \"=\""; next }
-            have = 1
+            if (name == "")    { print "!" NR ": Missing name before \"=\""; next }
+            have = 1; first = NR; last = NR
         }
         END { flush() }
     ' "$1"
@@ -160,6 +295,7 @@ split_words() {
 CONF_FILE=""
 CONF_BACKUP_DIR="~/cinnamon-cans"
 declare -A CONF_ITEMS=()       # item name -> yes | no
+declare -A CONF_ITEM_LINES=()  # item name -> its line(s) in the config
 USER_ITEMS_DIR=""              # your own items: "items" next to the config
 
 # resolve_config NAME -> nothing = config/default.conf, a plain name =
@@ -179,35 +315,50 @@ load_config() {
     CONF_FILE="$(resolve_config "$1")"
     if [ ! -f "$CONF_FILE" ]; then
         if [ -z "$1" ]; then
-            err "no config found at config/default.conf"
-            say "Create your config first:"
-            say ""
-            say "    cp $CC_ROOT/config/example.conf $CC_ROOT/config/default.conf"
-            exit 1
+            die "No config found at config/default.conf" \
+                "Create your own default config file using:" \
+                "\$ cd $(to_tilde "$CC_ROOT")" \
+                "\$ cp config/example.conf config/default.conf"
         fi
-        die "config file not found: $CONF_FILE"
+        die "Provided config file not found: $(rel_path "$CONF_FILE")"
     fi
     USER_ITEMS_DIR="$(cd "$(dirname "$CONF_FILE")" && pwd)/items"
 
-    local section name value problems=0
-    while IFS=$'\t' read -r section name value; do
+    # Every problem is collected first, so all of them are shown at once,
+    # each with the line(s) it is on:   L6: shell must be yes or no ...
+    local section name lines value problems=() unknown=" "
+    while IFS=$'\t' read -r section name lines value; do
         if [[ "$section" == !* ]]; then
-            err "$CONF_FILE line ${section#!}"; problems=$((problems + 1)); continue
+            section="${section#!}"
+            problems+=("${SUB2}L${section%%:*}:${section#*:}"); continue
         fi
         case "$section.$name" in
             general.backup_dir)
                 if [ -n "$value" ]; then CONF_BACKUP_DIR="$value"
-                else err "$CONF_FILE: backup_dir is empty"; problems=$((problems + 1)); fi ;;
+                else problems+=("${SUB2}L$lines: Setting \"backup_dir\" is empty"); fi ;;
             items.*)
+                CONF_ITEM_LINES[$name]="$lines"
                 if [ "$value" = "yes" ] || [ "$value" = "no" ]; then CONF_ITEMS[$name]="$value"
-                else err "$CONF_FILE: [items] $name = \"$value\" (expected yes or no)"; problems=$((problems + 1)); fi ;;
+                else problems+=("${SUB2}L$lines: Item \"$name\" must be yes or no, not \"$value\""); fi ;;
             general.*)
-                err "$CONF_FILE: unknown setting \"$name\" in [general]"; problems=$((problems + 1)) ;;
+                problems+=("${SUB2}L$lines: Unknown setting \"$name\" in [general]") ;;
             *)
-                err "$CONF_FILE: unknown section [$section]"; problems=$((problems + 1)) ;;
+                # One line per unknown section is enough; it names the line
+                # of the [section] heading itself.
+                [[ "$unknown" == *" $section "* ]] && continue
+                unknown+="$section "
+                lines="$(awk -v s="[$section]" '{ t = $0; gsub(/^[ \t]+|[ \t\r]+$/, "", t) }
+                                                t == s { print NR; exit }' "$CONF_FILE")" || true
+                problems+=("${SUB2}L${lines:-?}: Unknown section [$section]") ;;
         esac
     done < <(parse_ini "$CONF_FILE")
-    [ "$problems" -eq 0 ] || die "please fix the config file above ($problems problem(s))"
+    [ "${#problems[@]}" -eq 0 ] || config_problems "${problems[@]}"
+}
+
+# config_problems LINE... -> stops with every problem of the config file,
+#   listed under its name (the same layout as for item files).
+config_problems() {
+    die "Invalid config file(s) detected:" "${SUB}$(file_dot "$(rel_path "$CONF_FILE")")" "$@"
 }
 
 # backup_dir -> the folder where cans live, with ~ expanded.
@@ -238,23 +389,23 @@ load_system_facts() {
 }
 
 startup_checks() {
-    local problems=0 tool
+    local problems=() tool
     if [ ! -r /etc/linuxmint/info ]; then
-        err "this does not look like Linux Mint (/etc/linuxmint/info is missing)"; problems=$((problems + 1))
+        problems+=("${SUB}This does not look like Linux Mint (/etc/linuxmint/info is missing)")
     elif [ "$SYS_EDITION" != "Cinnamon" ]; then
-        err "this is Linux Mint ${SYS_EDITION:-?}; cinnamon-can only supports the Cinnamon edition"; problems=$((problems + 1))
+        problems+=("${SUB}This is Linux Mint ${SYS_EDITION:-?}; cinnamon-can only supports the Cinnamon edition")
     fi
-    [ -n "$SYS_CINNAMON" ] || { err "could not find Cinnamon (\"cinnamon --version\" failed)"; problems=$((problems + 1)); }
+    [ -n "$SYS_CINNAMON" ] || problems+=("${SUB}Could not find Cinnamon (\"cinnamon --version\" failed)")
     for tool in dconf tar gzip awk diff cmp find xargs; do
-        command -v "$tool" >/dev/null 2>&1 || { err "required program \"$tool\" is missing"; problems=$((problems + 1)); }
+        command -v "$tool" >/dev/null 2>&1 || problems+=("${SUB}Required program \"$tool\" is missing")
     done
-    [ "$problems" -eq 0 ] || die "cannot continue ($problems problem(s) above)"
+    [ "${#problems[@]}" -eq 0 ] || die "This computer cannot run cinnamon-can:" "${problems[@]}"
 
     case "$SYS_RELEASE" in
         22.*) ;;
         *) warn "Linux Mint $SYS_RELEASE has not been tested; cinnamon-can is made for Mint 22.x" ;;
     esac
-    [ "${XDG_SESSION_TYPE:-}" != "wayland" ] || warn "this is a Wayland session; cinnamon-can is tested on X11 only"
+    [ "${XDG_SESSION_TYPE:-}" != "wayland" ] || warn "This is a Wayland session; cinnamon-can is tested on X11 only"
 }
 
 
@@ -301,7 +452,7 @@ new_can_id() {
         done
         printf '%s\n' "$used" | grep -qx "$id" || break
         tries=$((tries + 1))
-        [ "$tries" -lt 1000 ] || die "could not find a free can ID"
+        [ "$tries" -lt 1000 ] || die "Could not find a free can ID"
     done
     printf '%s\n' "$id"
 }
@@ -309,7 +460,7 @@ new_can_id() {
 # resolve_can WHAT -> full path of a can, given its ID (any case) or a path.
 resolve_can() {
     local what="$1" id f
-    [ -n "$what" ] || die "please name a can: its ID (see: cinnamon-can list) or its path"
+    [ -n "$what" ] || die "Please name a can: its ID (see: cinnamon-can list) or its path"
     if [ -f "$what" ]; then
         printf '%s/%s\n' "$(cd "$(dirname "$what")" && pwd)" "$(basename "$what")"
         return 0
@@ -319,9 +470,9 @@ resolve_can() {
         for f in "$(backup_dir)"/*-"$id"-*.tar.gz.canned; do
             [ -f "$f" ] && { printf '%s\n' "$f"; return 0; }
         done
-        die "there is no can with ID $id in $(to_tilde "$(backup_dir)") (see: cinnamon-can list)"
+        die "There is no can with ID $(show_id "$id") in $(to_tilde "$(backup_dir)") (see: cinnamon-can list)"
     fi
-    die "can not found: $what"
+    die "Can file not found: $what"
 }
 
 # log_add FIELDS... -> one line in the log: time, computer, user, fields.
@@ -363,6 +514,16 @@ to_tilde() {
         "$HOME")   printf '~\n' ;;
         "$HOME"/*) printf '~/%s\n' "${1#"$HOME"/}" ;;
         *)         printf '%s\n' "$1" ;;
+    esac
+}
+
+# rel_path PATH -> a path inside the program's folder written from there
+#   (config/default.conf, items/sound.item), as "help" writes them; any
+#   other path with ~ for your home folder.
+rel_path() {
+    case "$1" in
+        "$CC_ROOT"/*) printf '%s\n' "${1#"$CC_ROOT"/}" ;;
+        *)            to_tilde "$1" ;;
     esac
 }
 

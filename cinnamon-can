@@ -28,31 +28,32 @@ source "$CC_ROOT/lib/common.sh"
 source "$CC_ROOT/lib/items.sh"
 
 usage() {
-    cat <<EOF
-cinnamon-can $CC_VERSION -- keep your Linux Mint Cinnamon desktop in cans
+    # The first line carries the INFO badge; the rest starts after it.
+    info "cinnamon-can $CC_VERSION -- keep your Linux Mint Cinnamon desktop in cans"
+    sed "s/^\(.\)/$MSG_INDENT\1/" <<EOF
 
 Usage:
   cinnamon-can [-c CONFIG] COMMAND
 
 Commands:
-  seal [-L TEXT]      Put the current settings into a new can (-L, --label:
-                      a short description stored with the can)
-  list                Show all cans
-  peek CAN            Show what is inside a can
-  diff CAN [CAN2]     Show what differs between a can and this computer,
-                      or between two cans
-  open CAN            Show the differences, ask, then make this computer
-                      match the can and restart. Run it with sudo and
-                      the full path of this program to also restore
-                      system files.
+  seal [-L TEXT]    Put the current settings into a new can
+                    (-L, --label: a short description stored with it)
+  list              Show all cans
+  peek CAN          Show what is inside a can
+  diff CAN [CAN2]   Show what differs between a can and this
+                    computer, or between two cans
+  open CAN          Show the differences, ask, then make this
+                    computer match the can and restart. Run it with
+                    sudo and the full path of this program to also
+                    restore system files.
 
   CAN is a can's ID (as shown by "list") or the path to a can file.
 
 Options:
-  -c, --config-file NAME|PATH   use config/NAME.conf or that file
+  -c, --config-file NAME|PATH   Use config/NAME.conf or that file
                                 (default: config/default.conf)
-  -v, --version                 show the version
-  -h, --help                    show this help
+  -v, --version                 Show the version
+  -h, --help                    Show this help
 EOF
 }
 
@@ -63,10 +64,10 @@ main() {
     while [ $# -gt 0 ]; do
         case "$1" in
             -c|--config-file)
-                [ $# -ge 2 ] || die "$1 needs a config name or path"
+                [ $# -ge 2 ] || die "Option $1 needs a config name or path"
                 config_name="$2"; shift 2; continue ;;
             --config-file=*) config_name="${1#--config-file=}" ;;
-            -v|--version)    say "cinnamon-can $CC_VERSION"; exit 0 ;;
+            -v|--version)    info "cinnamon-can $CC_VERSION"; exit 0 ;;
             -h|--help|help)  usage; exit 0 ;;
             *)
                 if [ -z "$command" ] && [[ "$1" != -* ]]; then command="$1"; else rest+=("$1"); fi ;;
@@ -77,7 +78,7 @@ main() {
     case "$command" in
         seal|list|peek|diff|open) ;;
         "") usage; exit 0 ;;
-        *)  err "unknown command \"$command\""; say "Run \"cinnamon-can help\" for the commands."; exit 2 ;;
+        *)  err "Unknown command \"$command\"" "Run \"cinnamon-can help\" for the commands."; exit 2 ;;
     esac
 
     # sudo is only meant for "open" (to also restore system files). The
@@ -94,7 +95,7 @@ main() {
                 CC_SYSTEM_RESTORE=1 "$CC_ROOT/cinnamon-can" ${config_name:+-c "$config_name"} \
                 open "${rest[@]+"${rest[@]}"}"
         fi
-        die "run cinnamon-can as your normal user (only \"open\" may be run with sudo)"
+        die "Run cinnamon-can as your normal user (only \"open\" may be run with sudo)"
     fi
 
     load_system_facts

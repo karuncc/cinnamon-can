@@ -43,7 +43,7 @@ collect_tree() {
 collect_dconf() {
     local out="$1" n split="$CC_TMP/dconf-split"; shift
     rm -rf "$split"; mkdir -p "$split"
-    dconf dump / > "$CC_TMP/dconf-dump.txt" || die "could not read the settings database (dconf dump)"
+    dconf dump / > "$CC_TMP/dconf-dump.txt" || die "Could not read the settings database (dconf dump)"
     write_dconf_patterns "$CC_TMP/dconf-patterns.txt"
     awk -f "$CC_ROOT/lib/dconf.awk" -v outdir="$split" -v want="$*" \
         "$CC_TMP/dconf-patterns.txt" "$CC_TMP/dconf-dump.txt"
@@ -94,7 +94,7 @@ add_candidate() {
     local m="$1" p="$2"
     if [ -d "$m" ] && [[ "$m" == */ || "$p" == */ ]]; then
         find "${m%/}/" -mindepth 1 \( -type f -o -type l \) -print >> "$CC_TMP/file-candidates.txt" 2>/dev/null \
-            || warn "some files in $p could not be read"
+            || warn "Some files in $p could not be read"
     elif [ -f "$m" ] || [ -L "$m" ]; then
         printf '%s\n' "$m" >> "$CC_TMP/file-candidates.txt"
     fi
@@ -110,7 +110,7 @@ collect_system() {
             mkdir -p "$out/items/$n/root$(dirname "$p")"
             cp -p "$p" "$out/items/$n/root$p"
         elif [ -e "$p" ]; then
-            warn "cannot read $p; it is left out"
+            warn "Cannot read $p; it is left out"
         fi
     done < <(split_words "${ITEM_SYSTEM[$n]}")
 }
