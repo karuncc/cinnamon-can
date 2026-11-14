@@ -12,3 +12,13 @@ dconf       = /org/cinnamon/
               /org/gnome/desktop/interface/clock-*
               /org/cinnamon/desktop/interface/first-day-of-week
               /org/gnome/desktop/interface/toolkit-accessibility
+# Never kept: what you typed into the Run dialog (Alt+F2) and into Looking
+# Glass. It can hold anything, even a password.
+exclude     = /org/cinnamon/command-history
+              /org/cinnamon/looking-glass-history
+# Written by the programs themselves: where and how big a window was (the
+# file chooser ...), and the folder it showed last. The same names as in
+# app-settings.
+ignore      = */window-size  */window-width  */window-height  */window-position
+              */window-maximized  */maximized  */is-maximized
+              /org/gtk/settings/file-chooser/last-folder-uri

@@ -221,7 +221,9 @@ Every part is an **item**: one small file in `items/` saying what it keeps.
 | `hardware` | monitor layout, text and pointer size, colour profiles, audio device names (same model only) | off |
 
 **Never kept:** Warpinator's computer ID, the night-light location, the
-screen scaling factor.
+screen scaling factor, and private histories: what you typed into the
+Run dialog (Alt+F2) and Looking Glass, what you searched for in Text
+Editor and in Passwords and Keys, the Bluetooth devices you connected to.
 
 Switch items on or off in `config/default.conf`:
 
