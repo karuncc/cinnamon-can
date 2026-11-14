@@ -14,7 +14,7 @@
 # Covered: every script's syntax, the command line, the start-up errors
 # (also with a broken "cinnamon"), seal / list / peek / diff, cans with a
 # broken manifest, the diff columns and their order, which item owns
-# which setting and which file, what is excluded and what is never kept.
+# which setting and which file, what is excluded, ignored and never kept.
 #
 # NOT covered -- follow the Testing rules in AGENTS.md instead: really
 # applying a can ("open" + yes), sudo, language, system files, restart.
@@ -155,6 +155,59 @@ l1="$(printf '%s\n' "$out" | grep -nF -m1 'cc-test-key'      | cut -d: -f1)" || 
 l2="$(printf '%s\n' "$out" | grep -nF -m1 'cc-test-file.txt' | cut -d: -f1)" || true
 check "inside an item, settings come before files" \
     test -n "$l1" -a -n "$l2" -a "$l1" -lt "$l2"
+
+
+section "ignore: what programs write by themselves does not count"
+# A can whose items ignore made-up settings (one of each pattern kind)
+# and a made-up line in one of its files, plus ONE real change. Only the
+# real change may count.
+U="$TMP/unpack-ignore"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+printf '\n[org/cinnamon/sounds]\ncc-ign-start-a=1\nb-cc-ign-end=1\ncc-ign-exact=1\ncc-real-key=1\n[org/cinnamon/sounds/cc-ign-folder]\nc=1\n' \
+    >> "$U/items/sound/dconf.ini"
+printf 'ignore = */cc-ign-start-*  */*-cc-ign-end  */cc-ign-exact  /org/cinnamon/sounds/cc-ign-folder/\n' \
+    >> "$U/catalog/builtin/sound.item"
+# A home file of an item that has no "ignore" yet gets a made-up line.
+R=""
+while IFS= read -r F; do
+    n="${F#"$U/items/"}"; n="${n%%/*}"
+    [ -f "$U/catalog/builtin/$n.item" ] && ! grep -q '^ignore' "$U/catalog/builtin/$n.item" || continue
+    R="~/${F#*/home/}"
+    [ -z "$(tail -c 1 "$F")" ] || echo >> "$F"     # end the last line first
+    echo "cc-noise-line=1" >> "$F"
+    printf 'ignore = %s:cc-noise-line=\n' "$R" >> "$U/catalog/builtin/$n.item"
+    break
+done < <(find "$U/items" -path '*/home/*' -type f)
+sed -i 's/^id[[:space:]]*=.*/id = GN22/' "$U/manifest.txt"
+( cd "$U" && tar -czf "$TMP/cans/manual-GN22-20300101T000004+0000.tar.gz.canned" . )
+run s out "$CC" -c "$CONF" diff "$BASEID" GN22
+check "the real change still counts: exit 1"            [ "$s" -eq 1 ]
+check "... and is shown"                                has "$out" "cc-real-key"
+check "ignored settings are not shown"                  sh -c '! printf "%s" "$1" | grep -qE "cc-ign|/c$"' sh "$out"
+check "only the real change is counted"                 has "$out" "1 setting(s), 0 file(s)"
+[ -n "$R" ] || printf '  skip the can has no home file to add a line to\n'
+
+# An OLDER can: its own items know nothing of an ignore line that this
+# computer's items have now. A copy of the program with one more ignore
+# line must not show the setting; the program itself must.
+U="$TMP/unpack-older"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+printf '\n[org/cinnamon/sounds]\ncc-later-noise=1\n' >> "$U/items/sound/dconf.ini"
+sed -i 's/^id[[:space:]]*=.*/id = KD22/' "$U/manifest.txt"
+( cd "$U" && tar -czf "$TMP/cans/manual-KD22-20300101T000005+0000.tar.gz.canned" . )
+mkdir "$TMP/prog"; cp -a "$CC" "$ROOT/lib" "$ROOT/items" "$TMP/prog/"
+printf 'ignore = */cc-later-noise\n' >> "$TMP/prog/items/sound.item"
+run s out "$CC" -c "$CONF" diff "$BASEID" KD22
+check "older can, items as they were: it shows"         [ "$s" -eq 1 ]
+run s out "$TMP/prog/cinnamon-can" -c "$CONF" diff "$BASEID" KD22
+check "older can, this computer ignores it now: exit 0" [ "$s" -eq 0 ]
+
+# Wrong ignore entries are reported, every one of them at once.
+mkdir -p "$TMP/items"
+printf 'description = test\ndconf = /cc/test/\nignore = */*both-ends* not-a-path ~/no-beginning */fine\n' > "$TMP/items/cc-bad.item"
+run s out "$CC" -c "$CONF" list
+check "a wrong ignore stops the program: exit 1"        [ "$s" -eq 1 ]
+check "... naming every wrong entry"                    sh -c 'for w in "*/*both-ends*" not-a-path "~/no-beginning"; do printf "%s" "$1" | grep -qF "\"$w\"" || exit 1; done' sh "$out"
+check "... but not the good one"                        hasnt "$out" '"*/fine"'
+rm -rf "$TMP/items"
 
 
 section "broken cans"

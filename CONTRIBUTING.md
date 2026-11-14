@@ -25,6 +25,31 @@ the script's header). New behaviour should come with a new check. The
 parts it cannot cover (really applying a can, sudo, the restart) follow
 the sandbox rules in `AGENTS.md`.
 
+## Ignore lines in built-in items
+
+Programs write some things by themselves: where a window was, which
+version ran last, a time stamp. Built-in items list them under `ignore`,
+so they never show up in `diff` as a change (see `AGENTS.md`, Formats).
+Every user gets these lines and cannot take one back, so a line goes in
+only when:
+
+- **The program is common**: it comes with Linux Mint or many people use
+  it. For a rarer program, use your own item.
+- **The program really writes it by itself**, the user did not choose
+  it: it showed up in the over-time check in `AGENTS.md` (seal, use the
+  computer for a day, `diff`), or the program's schema or code shows it
+  is a window place, a version, a history or a time stamp.
+- **A wide pattern** (`*/name*`, `*/*name`) was checked against the
+  schemas of the installed programs (`/usr/share/glib-2.0/schemas/`) and
+  catches no setting a user would choose. When in doubt, list full paths.
+- **It is not private.** A history of what the user typed, device names
+  or a computer ID must not be kept at all: that is `exclude`, not
+  `ignore`.
+
+Put the line in the item that takes the setting or file (`diff` shows
+each change under its item's name), with a comment saying what writes
+it. A commit that only adds such lines is a `fix`.
+
 ## Branches
 
     type/short-kebab-name           e.g. fix/diff-empty-columns

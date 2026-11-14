@@ -17,6 +17,9 @@
 #
 # Path kinds:  /a/b/ folder (any depth)   /a/b/c one setting
 #              /a/b/c*  settings in /a/b/ whose name starts with "c"
+#              */c      every setting called "c", in any folder
+#              */c*     every setting whose name starts with "c"
+#              */*c     every setting whose name ends with "c"
 
 BEGIN {
     FS = "\n"
@@ -29,7 +32,13 @@ FNR == NR {
     split($0, f, "\t")
     np++
     kind[np] = f[1]; item[np] = f[2]; p = f[3]
-    if (p ~ /\*$/)      { type[np] = "glob"; p = substr(p, 1, length(p) - 1) }
+    if (p ~ /^\*\//) {
+        p = substr(p, 3)
+        if (p ~ /\*$/)      { type[np] = "name-start"; p = substr(p, 1, length(p) - 1) }
+        else if (p ~ /^\*/) { type[np] = "name-end";   p = substr(p, 2) }
+        else                { type[np] = "name" }
+    }
+    else if (p ~ /\*$/) { type[np] = "glob"; p = substr(p, 1, length(p) - 1) }
     else if (p ~ /\/$/) { type[np] = "folder" }
     else                { type[np] = "key" }
     pat[np] = p
@@ -58,8 +67,14 @@ FNR == NR {
 }
 
 # hit(I, PATH) -> 1 if pattern I matches PATH.
-function hit(i, path,    rest) {
+function hit(i, path,    rest, nm) {
     if (type[i] == "key") return path == pat[i]
+    if (type[i] ~ /^name/) {
+        nm = path; sub(/.*\//, "", nm)          # the setting's own name
+        if (type[i] == "name")       return nm == pat[i]
+        if (type[i] == "name-start") return index(nm, pat[i]) == 1
+        return length(nm) >= length(pat[i]) && substr(nm, length(nm) - length(pat[i]) + 1) == pat[i]
+    }
     if (index(path, pat[i]) != 1) return 0
     if (type[i] == "glob") { rest = substr(path, length(pat[i]) + 1); return index(rest, "/") == 0 }
     return 1
