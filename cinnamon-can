@@ -17,7 +17,7 @@
 #   -o pipefail  a pipeline fails if any part of it fails
 set -euo pipefail
 
-CC_VERSION="1.0.0"
+CC_VERSION="1.1.0"
 
 # The folder this program lives in, even when called through a symlink.
 CC_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
