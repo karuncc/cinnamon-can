@@ -330,7 +330,8 @@ screen scaling factor, when the Update Manager last ran and which apps
 the Mint installer put on, and private histories: what you typed into
 the Run dialog (Alt+F2) and Looking Glass, what you searched for in Text
 Editor and in Passwords and Keys, the Bluetooth devices you connected to,
-and the PGP key you last signed with.
+and the PGP key you last signed with. What no item looks at all (Wi-Fi,
+printers, keys ...) is listed under "Moving to a new computer".
 
 Switch items on or off in `config/default.conf`:
 
@@ -406,11 +407,11 @@ built-in file is a good start).
    fonts, themes) — their settings then apply right away.
 4. `cinnamon-can open ID` — with sudo and the full path (see "Open a can")
    to include the system files. The computer restarts.
-5. Things cinnamon-can does not handle: printers, Wi-Fi and VPN passwords,
-   Bluetooth pairing, online accounts, browser data, SSH/GPG keys, user
-   groups, firewall, drivers. A Web App's launcher comes along, but its
-   browser profile does not (it holds logins): make the Web App again on
-   the new computer.
+5. Things cinnamon-can does not handle: printers, Wi-Fi and VPN
+   connections (with their passwords), Bluetooth pairing, online accounts,
+   browser data, SSH/GPG keys, user groups, firewall, drivers. A Web
+   App's launcher comes along, but its browser profile does not (it holds
+   logins): make the Web App again on the new computer.
 
 ## Configuration
 
