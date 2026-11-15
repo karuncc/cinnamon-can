@@ -13,9 +13,11 @@
 #      settings database, the language, the system files (only with sudo),
 #      and ask fcitx to reload. Files the can does not have are deleted
 #      (they were listed as "deleted" in the comparison); system files are
-#      never deleted.
+#      never deleted. Ctrl+C is switched off while this runs (a few
+#      seconds), so the computer is never left half old, half new.
 #   5. Write the log, show how to undo, and restart the computer after a
 #      10-second countdown (Ctrl+C cancels the restart).
+#   Ctrl+C before step 4 stops with "Cancelled; nothing was changed."
 
 # shellcheck source=lib/diff.sh
 source "$CC_ROOT/lib/diff.sh"
@@ -64,8 +66,13 @@ cmd_open() {
     say ""
     show_sealed "The autocan is sealed:"
 
+    # From here on Ctrl+C is switched off (programs started from here, such
+    # as "dconf load", ignore it too) until the restart countdown, which
+    # has its own: stopping halfway would leave a mix of old and new.
+    trap '' INT
     say ""
-    info "Applying changes from the can $(show_id "$can_id") to this computer ..."
+    info "Applying changes from the can $(show_id "$can_id") to this computer ..." \
+         "${C_GREY}Ctrl+C is off until this is done${C_RESET}"
     run_step "Files"    apply_files    || problems=1
     run_step "Settings" apply_settings || problems=1
     # The language only when the can changes it.

@@ -212,14 +212,15 @@ cinnamon-can open K7Q2
 
 1. Shows the same comparison as `diff`, with a warning on top if the can
    comes from another Mint or Cinnamon version.
-2. Asks you to type `yes`. Anything else changes nothing.
+2. Asks you to type `yes`. Anything else, or Ctrl+C, changes nothing.
 3. Saves the current state as an `autocan` (your undo).
 4. Makes this computer match the can: files first, then settings, your
    language, and asks the input method (fcitx) to reload. Files the can does
    not have are removed (they were shown as `[DEL]`). The old home folder
    (`/home/olduser/...`) is replaced by yours everywhere. A wallpaper image
    this computer does not have is copied to
-   `~/.local/share/backgrounds/cinnamon-can/`.
+   `~/.local/share/backgrounds/cinnamon-can/`. Ctrl+C is off while this
+   runs (a few seconds), so the computer is never left half done.
 5. Prints how to undo, writes the log, and **restarts the computer** after a
    10-second countdown (Ctrl+C cancels only the restart).
 

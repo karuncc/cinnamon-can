@@ -201,7 +201,21 @@ make_tmpdir() {
     CC_TMP="$(mktemp -d "$base/cinnamon-can.XXXXXXXX")" || die "Cannot create a temporary folder in $base"
     chmod 700 "$CC_TMP"
     trap cleanup EXIT
-    trap 'exit 130' INT TERM
+    trap on_ctrl_c INT
+    trap 'exit 130' TERM
+}
+
+# What Ctrl+C says before the program stops. A command changes it when
+# stopping at that point means something else ("seal": no can was made).
+# While "open" writes, Ctrl+C is switched off, so nothing is half done.
+CC_CANCEL_NOTE="Cancelled; nothing was changed."
+
+# on_ctrl_c -> a new line (the terminal leaves the cursor after "^C"),
+#   the note above, then stop; cleanup still runs. Written to stderr, so
+#   it reaches the screen even while a report is being written to a file.
+on_ctrl_c() {
+    { printf '\n'; info "$CC_CANCEL_NOTE"; } >&2
+    exit 130
 }
 
 track_partial()  { CC_PARTIAL+=("$1"); }
