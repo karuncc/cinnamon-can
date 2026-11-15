@@ -112,9 +112,9 @@ cinnamon-can peek K7Q2
 ```
 
 Shows when and on which computer and versions the can was made, every
-item, the list of software you had installed (in a terminal, what is not
-installed here is yellow), and what the can uses that this computer has
-not installed.
+item, and the list of software you had installed. It shows only the can:
+what differs from this computer (other versions, and what the can uses
+that is not installed here) is shown by `diff`.
 
 ### Compare
 
@@ -332,11 +332,10 @@ built-in file is a good start).
 2. Old computer: `cinnamon-can seal -L "Move"`, then copy the can (from
    `~/cinnamon-cans/`) to the new computer's `~/cinnamon-cans/`.
 3. New computer: get cinnamon-can, create the config, then
-   `cinnamon-can peek ID` and install what it lists as not installed (apps,
+   `cinnamon-can diff ID` and install what it lists as not installed (apps,
    fonts, themes) — their settings then apply right away.
-4. `cinnamon-can diff ID`, then `cinnamon-can open ID` — with sudo and the
-   full path (see "Open a can") to include the system files. The computer
-   restarts.
+4. `cinnamon-can open ID` — with sudo and the full path (see "Open a can")
+   to include the system files. The computer restarts.
 5. Things cinnamon-can does not handle: printers, Wi-Fi and VPN passwords,
    Bluetooth pairing, online accounts, browser data, SSH/GPG keys, user
    groups, firewall, drivers. A Web App's launcher comes along, but its

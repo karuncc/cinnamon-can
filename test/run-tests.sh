@@ -129,6 +129,24 @@ check "peek lists the items"    has "$out" "keyboard"
 run s out "$CC" -c "$CONF" peek "$(printf '%s' "$BASEID" | tr '[:upper:]' '[:lower:]')"
 check "an ID may be typed in lower case" [ "$s" -eq 0 ]
 
+# peek shows only what is in the can: a can from another Cinnamon version,
+# with a package this computer does not have, is not compared with it.
+U="$TMP/unpack-peek"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+sed -i 's/^id[[:space:]]*=.*/id = PEK2/; s/^cinnamon_version[[:space:]]*=.*/cinnamon_version = 0.0.1/' "$U/manifest.txt"
+SW="$(find "$U/items" -name software.txt | head -n 1)"
+[ -z "$SW" ] || printf '[apps]\ncc-no-such-package\n' > "$SW"
+( cd "$U" && tar -czf "$TMP/cans/manual-PEK2-20300101T000009+0000.tar.gz.canned" . )
+run s out "$CC" -c "$CONF" peek PEK2
+check "peek of another version: exit 0"            [ "$s" -eq 0 ]
+check "peek does not compare the versions"         hasnt "$out" "Differs from this computer"
+check "... nor what is installed here"             hasnt "$out" "installed on this computer"
+if [ -n "$SW" ]; then
+    check "peek lists the software names in the can" \
+        sh -c 'printf "%s\n" "$1" | grep -qE "└ Apps +cc-no-such-package$"' sh "$out"
+else
+    printf '  skip the can has no software list\n'
+fi
+
 
 section "against the live computer (a mid-run settings change can fail these)"
 run s out "$CC" -c "$CONF" diff "$BASEID"

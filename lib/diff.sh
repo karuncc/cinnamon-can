@@ -24,6 +24,8 @@
 source "$CC_ROOT/lib/collect.sh"
 # shellcheck source=lib/list.sh
 source "$CC_ROOT/lib/list.sh"
+# shellcheck source=lib/refs.sh
+source "$CC_ROOT/lib/refs.sh"
 
 WALLPAPER_COPY_DIR=".local/share/backgrounds/cinnamon-can"
 
@@ -39,6 +41,37 @@ cmd_diff() {
 CMP_MINUS="" CMP_PLUS="" CMP_RESULT="" CMP_REPORT="" CMP_TOTAL=0 CMP_SYSTEM=0
 CMP_PLUS_ID=""
 CMP_ITEMS=()
+
+# version_notes -> what differs between the opened can (MAN) and this
+#   computer, one line each (nothing when it all matches).
+version_notes() {
+    [ "${MAN[can.mint_release]:-}" = "$SYS_RELEASE" ] || echo "Linux Mint ${MAN[can.mint_release]:-?} in the can, $SYS_RELEASE here"
+    [ "${MAN[can.mint_edition]:-}" = "$SYS_EDITION" ] || echo "${MAN[can.mint_edition]:-?} edition in the can, $SYS_EDITION here"
+    [ "${MAN[can.cinnamon_version]:-}" = "$SYS_CINNAMON" ] || echo "Cinnamon ${MAN[can.cinnamon_version]:-?} in the can, $SYS_CINNAMON here"
+    [ "${MAN[can.arch]:-}" = "$SYS_ARCH" ] || echo "${MAN[can.arch]:-?} in the can, $SYS_ARCH here"
+    return 0
+}
+
+# versions_between ID RELEASE EDITION CINNAMON ARCH -> like version_notes,
+#   but between the opened can (MAN) and another can (ID and its versions).
+versions_between() {
+    local a b
+    a="can $(show_id "${MAN[can.id]}")" b="can $(show_id "$1")"
+    [ "${MAN[can.mint_release]:-?}" = "$2" ] || echo "Linux Mint ${MAN[can.mint_release]:-?} in $a, $2 in $b"
+    [ "${MAN[can.mint_edition]:-?}" = "$3" ] || echo "${MAN[can.mint_edition]:-?} edition in $a, $3 in $b"
+    [ "${MAN[can.cinnamon_version]:-?}" = "$4" ] || echo "Cinnamon ${MAN[can.cinnamon_version]:-?} in $a, $4 in $b"
+    [ "${MAN[can.arch]:-?}" = "$5" ] || echo "${MAN[can.arch]:-?} in $a, $5 in $b"
+    return 0
+}
+
+# show_version_notes NOTES [TITLE] -> the version differences as one
+#   warning (on the normal output, since it is part of a report).
+show_version_notes() {
+    [ -n "$1" ] || return 0
+    local lines=() l
+    while IFS= read -r l; do lines+=("${SUB}$l"); done <<< "$1"
+    msg_lines "$B_WARN" "${2:-Differs from this computer:}" "${lines[@]}"
+}
 
 # build_comparison CAN [CAN2]
 build_comparison() {

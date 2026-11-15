@@ -121,7 +121,7 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   such a command.
 - Sentences start with a capital letter, labels the program writes too.
 - `warn` and `err` go to stderr; a warning that is part of a report
-  (`diff`, `peek`, `list`) uses `msg_lines "$B_WARN"` on stdout, so it
+  (`diff`, `seal`, `list`) uses `msg_lines "$B_WARN"` on stdout, so it
   stays in its place on the page.
 
 ## Testing

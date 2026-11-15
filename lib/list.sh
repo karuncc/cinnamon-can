@@ -1,10 +1,8 @@
 # lib/list.sh -- the "list" and "peek" commands, and reading cans.
 #
 #   list        every can in the backup folder, newest first
-#   peek CAN    what is inside one can
-
-# shellcheck source=lib/refs.sh
-source "$CC_ROOT/lib/refs.sh"
+#   peek CAN    what is inside one can (only the can: it is not compared
+#               with this computer; "diff CAN" does that)
 
 # MAN holds the manifest of the can that was opened last:
 #   MAN[can.id], MAN[can.label], MAN[can.home], MAN[items.keyboard] ...
@@ -55,16 +53,6 @@ tree_items() {
     return 0
 }
 
-# version_notes -> what differs between the opened can (MAN) and this
-#   computer, one line each (nothing when it all matches).
-version_notes() {
-    [ "${MAN[can.mint_release]:-}" = "$SYS_RELEASE" ] || echo "Linux Mint ${MAN[can.mint_release]:-?} in the can, $SYS_RELEASE here"
-    [ "${MAN[can.mint_edition]:-}" = "$SYS_EDITION" ] || echo "${MAN[can.mint_edition]:-?} edition in the can, $SYS_EDITION here"
-    [ "${MAN[can.cinnamon_version]:-}" = "$SYS_CINNAMON" ] || echo "Cinnamon ${MAN[can.cinnamon_version]:-?} in the can, $SYS_CINNAMON here"
-    [ "${MAN[can.arch]:-}" = "$SYS_ARCH" ] || echo "${MAN[can.arch]:-?} in the can, $SYS_ARCH here"
-    return 0
-}
-
 # can_header TEXT -> TEXT (e.g. "Sealing the can [K7Q2] ..."), then what
 #   the opened can (MAN) is, one fact per line:
 #     └ Label: before upgrade
@@ -80,27 +68,6 @@ can_header() {
     more+=("${SUB}When:  ${c:0:10} ${c:11:8} ${c:19}"
            "${SUB}On:    ${MAN[can.hostname]} (Linux Mint ${MAN[can.mint_release]}, Cinnamon ${MAN[can.cinnamon_version]}, ${MAN[can.arch]})")
     info "$1" "${more[@]}"
-}
-
-# versions_between ID RELEASE EDITION CINNAMON ARCH -> like version_notes,
-#   but between the opened can (MAN) and another can (ID and its versions).
-versions_between() {
-    local a b
-    a="can $(show_id "${MAN[can.id]}")" b="can $(show_id "$1")"
-    [ "${MAN[can.mint_release]:-?}" = "$2" ] || echo "Linux Mint ${MAN[can.mint_release]:-?} in $a, $2 in $b"
-    [ "${MAN[can.mint_edition]:-?}" = "$3" ] || echo "${MAN[can.mint_edition]:-?} edition in $a, $3 in $b"
-    [ "${MAN[can.cinnamon_version]:-?}" = "$4" ] || echo "Cinnamon ${MAN[can.cinnamon_version]:-?} in $a, $4 in $b"
-    [ "${MAN[can.arch]:-?}" = "$5" ] || echo "${MAN[can.arch]:-?} in $a, $5 in $b"
-    return 0
-}
-
-# show_version_notes NOTES [TITLE] -> the version differences as one
-#   warning (on the normal output, since it is part of a report).
-show_version_notes() {
-    [ -n "$1" ] || return 0
-    local lines=() l
-    while IFS= read -r l; do lines+=("${SUB}$l"); done <<< "$1"
-    msg_lines "$B_WARN" "${2:-Differs from this computer:}" "${lines[@]}"
 }
 
 # summarize_tree TEXT TREE -> TEXT, then one row per item: how many
@@ -147,18 +114,14 @@ software_counts() {
 # counted N WORD -> "1 app", "2 apps"
 counted() { if [ "$1" -eq 1 ]; then printf '1 %s' "$2"; else printf '%s %ss' "$1" "$2"; fi; }
 
-# show_software TREE REFS -> the full software list of a tree, one row per
-#   kind. Long lists go on over more lines, under the first word. In a
-#   terminal, names that are missing here (in REFS, from check_refs) are
-#   yellow.
+# show_software TREE -> the full software list of a tree, one row per
+#   kind. Long lists go on over more lines, under the first word.
 show_software() {
-    local f missing="$CC_TMP/missing-software.txt" note="For reference only, never installed for you"
+    local f
     f="$( { find "$1/items" -name software.txt 2>/dev/null || true; } | head -n 1)"
     [ -n "$f" ] || return 0
-    awk -F'\t' '$1 == "apt" || $1 == "flatpak" || $1 == "program" || $1 == "source" { print $2 }' "$2" > "$missing"
-    [ ! -s "$missing" ] || [ -z "$C_RESET" ] || note="$note; ${C_RESET}${C_YELLOW}yellow${C_RESET}${C_GREY} = not installed here"
     say ""
-    info "List of software names stored in the can:" "${C_GREY}$note${C_RESET}"
+    info "List of software names stored in the can:" "${C_GREY}For reference only, never installed for you${C_RESET}"
     software_row "Apps"             "$(software_section "$f" apps)"
     software_row "Language support" "$(software_section "$f" language-support)"
     software_row "Flatpak"          "$(software_section "$f" flatpak | awk '{ print $1 }')"
@@ -170,13 +133,11 @@ show_software() {
 #   the words wrapped to the width of the screen.
 software_row() {
     printf '%s%-17s ' "$ROW" "$1"
-    printf '%s\n' "${2:-none}" | awk -v room="$(( $(screen_width) - 29 ))" -v pad="$MSG_INDENT                    " \
-        -v missing="$CC_TMP/missing-software.txt" -v on="$C_YELLOW" -v off="$C_RESET" '
-        BEGIN { if (on != "") while ((getline l < missing) > 0) gone[l] = 1 }
+    printf '%s\n' "${2:-none}" | awk -v room="$(( $(screen_width) - 29 ))" -v pad="$MSG_INDENT                    " '
         { for (i = 1; i <= NF; i++) {
               if (used > 0 && used + 1 + length($i) > room) { printf "\n%s", pad; used = 0 }
               if (used > 0) { printf " "; used++ }
-              if ($i in gone) printf "%s%s%s", on, $i, off; else printf "%s", $i
+              printf "%s", $i
               used += length($i) } }
         END { printf "\n" }'
 }
@@ -241,22 +202,18 @@ log_field() { printf '%s\n' "$1" | tr ' ' '\n' | sed -n "s/^$2=//p" | tr -d '"' 
 
 cmd_peek() {
     [ $# -eq 1 ] || die "Usage: cinnamon-can peek CAN"
-    local can tree notes
+    local can tree
     can="$(resolve_can "$1")" || exit 1
     make_tmpdir
     tree="$CC_TMP/can"
     open_can "$can" "$tree"
     load_items "$tree/catalog/builtin" "$tree/catalog/user"
 
+    # Only what the can holds. What differs from this computer (versions,
+    # software and themes not installed here) is shown by "diff CAN".
     say ""
     can_header "Peeking into the can $(show_id "${MAN[can.id]}") ..."
-    notes="$(version_notes)"
-    show_version_notes "$notes"
-
     say ""
     summarize_tree "Items in the can:" "$tree"
-    # What is missing is found first, so the software list can mark it.
-    check_refs "$tree" > "$CC_TMP/refs.txt"
-    show_software "$tree" "$CC_TMP/refs.txt"
-    show_missing "$CC_TMP/refs.txt" "$tree"
+    show_software "$tree"
 }

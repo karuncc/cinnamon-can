@@ -14,6 +14,8 @@
 source "$CC_ROOT/lib/collect.sh"
 # shellcheck source=lib/list.sh
 source "$CC_ROOT/lib/list.sh"
+# shellcheck source=lib/refs.sh
+source "$CC_ROOT/lib/refs.sh"
 
 cmd_seal() {
     local label=""
