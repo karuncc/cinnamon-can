@@ -77,12 +77,42 @@ backup folder `~/cinnamon-cans` only if you no longer need your cans.
 
 ```
 cinnamon-can seal
-cinnamon-can seal -L "Fresh setup"       # or --label="Fresh setup"
+cinnamon-can seal -L "Before upgrade"    # or --label="Before upgrade"
 ```
 
-Prints the can's **ID** (four characters, e.g. `K7Q2`), what each item
+```
+   INFO  Reading this computer's settings ...
+
+   INFO  Sealing the can [K7Q2] ...
+         └ Label: Before upgrade
+         └ When:  2026-11-13 14:30:00 +07:00
+         └ On:    mylaptop (Linux Mint 22.3, Cinnamon 6.6.9, x86_64)
+
+   INFO  Items to be sealed:
+         • ITEM             SETTINGS  FILES EXTRAS
+         └ appearance             37      4 wallpaper mountains.png
+         └ keyboard               64     16
+         └ language                0      0 language en_US, formats en_US.UTF-8
+         └ software                0      0 12 apps, 13 language packages, 1 flatpak
+         └ system                  0      3 time zone Europe/Berlin
+         └ • my-scripts            1      3
+
+   INFO  Software, themes and fonts the can uses:
+         └ All installed on this computer
+
+     OK  The can is sealed:
+         └ ID:     [K7Q2]
+         └ Size:   410.4 KB
+         └ Folder: ~/cinnamon-cans
+         └ File:   manual-K7Q2-20261113T143000+0700.tar.gz.canned
+```
+
+It prints the can's **ID** (four characters, e.g. `K7Q2`), what each item
 holds, and what the can uses that this computer has not installed (for
-example an app that is pinned to the panel but no longer installed).
+example an app that is pinned to the panel but no longer installed). A
+`•` before an item's name (blue in a terminal) marks one of your own
+items (see "Your own items"); the grey `•` that starts a table's heading
+row is only the point its rows hang from.
 
 ### Find a can
 
@@ -111,10 +141,11 @@ Wherever a command takes a CAN you may also give the path of a can file.
 cinnamon-can peek K7Q2
 ```
 
-Shows when and on which computer and versions the can was made, every
-item, and the list of software you had installed. It shows only the can:
-what differs from this computer (other versions, and what the can uses
-that is not installed here) is shown by `diff`.
+Shows when and on which computer and versions the can was made, the same
+table of items as `seal`, and the list of software you had installed
+(`(none)` where a kind is empty). It shows only the can: what differs
+from this computer (other versions, and what the can uses that is not
+installed here) is shown by `diff`.
 
 ### Compare
 
@@ -178,8 +209,11 @@ How to read it:
   a file, with `(+N | -N)`: how many lines the can adds and removes. The
   grey numbers next to the `-`/`+` are line numbers in the file.
 - `(default)` means the setting is at Cinnamon's default on that side.
-- `[NEW]` / `[DEL]`: files only one side has. This is normal — for example a
-  theme you installed, or an applet only one panel has.
+- `[NEW]` / `[DEL]`: files only one side has. Against this computer,
+  `[NEW]` is a file `open` would create and `[DEL]` one it would delete
+  (never a system file); between two cans, `[NEW]` is only in the second
+  and `[DEL]` only in the first. This is normal — for example a theme you
+  installed, or an applet only one panel has.
 - Changed **values** are normal. A changed **shape** (a setting name or a
   file's structure that looks different) usually means the two sides run
   different Cinnamon versions.
@@ -199,7 +233,10 @@ How to read it:
 - "Software, themes and fonts the can uses" is always shown: `All
   installed on this computer`, or a warning that lists the themes, fonts,
   apps and packages the can names but this computer lacks, with the item
-  that uses each one. They are never installed for you.
+  that uses each one (the item whose settings or files name it). They are
+  never installed for you.
+- The dots of the summary: green when nothing differs, yellow when
+  something does (system changes too), red for what is missing here.
 
 `diff`, `open` and `list` show long output page by page with `less`; set
 `PAGER` to use another program.
@@ -214,15 +251,34 @@ cinnamon-can open K7Q2
    comes from another Mint or Cinnamon version.
 2. Asks you to type `yes`. Anything else, or Ctrl+C, changes nothing.
 3. Saves the current state as an `autocan` (your undo).
-4. Makes this computer match the can: files first, then settings, your
-   language, and asks the input method (fcitx) to reload. Files the can does
-   not have are removed (they were shown as `[DEL]`). The old home folder
+4. Makes this computer match the can: files first, then settings and your
+   language. If fcitx is running, it is asked to reload, so it does not
+   write its old settings back (ibus keeps its settings among the others
+   and needs nothing more). Files the can does not have are removed (they
+   were shown as `[DEL]`). The old home folder
    (`/home/olduser/...`) is replaced by yours everywhere. A wallpaper image
    this computer does not have is copied to
-   `~/.local/share/backgrounds/cinnamon-can/`. Ctrl+C is off while this
-   runs (a few seconds), so the computer is never left half done.
-5. Prints how to undo, writes the log, and **restarts the computer** after a
-   10-second countdown (Ctrl+C cancels only the restart).
+   `~/.local/share/backgrounds/cinnamon-can/`. Each step shows `[DONE]`,
+   or `[FAIL]` with the reason under it. Ctrl+C is off while this runs (a
+   few seconds), so the computer is never left half done.
+5. Prints how to undo (under an `UNDO` badge), writes the log, and
+   **restarts the computer** after a 10-second countdown (Ctrl+C cancels
+   only the restart).
+
+```
+   INFO  Applying changes from the can [K7Q2] to this computer ...
+         Ctrl+C is off until this is done
+         └ • Files            [DONE]
+         └ • Settings         [DONE]
+         └ • Language         [DONE]
+
+     OK  This computer's settings now match the can [K7Q2]
+
+   UNDO  To go back to how this computer was, run:
+       $ cinnamon-can open R4T8
+
+   INFO  Restarting in 10 second(s) (Ctrl+C to cancel)
+```
 
 **System files** (login screen, system language and keyboard, time zone)
 need admin rights. A normal `open` leaves them and tells you so; to include
@@ -270,10 +326,12 @@ Every part is an **item**: one small file in `items/` saying what it keeps.
 | `hardware` | monitor layout, text and pointer size, colour profiles, audio device names (same model only) | off |
 
 **Never kept:** Warpinator's computer ID, the night-light location, the
-screen scaling factor, and private histories: what you typed into the
-Run dialog (Alt+F2) and Looking Glass, what you searched for in Text
+screen scaling factor, when the Update Manager last ran and which apps
+the Mint installer put on, and private histories: what you typed into
+the Run dialog (Alt+F2) and Looking Glass, what you searched for in Text
 Editor and in Passwords and Keys, the Bluetooth devices you connected to,
-and the PGP key you last signed with.
+and the PGP key you last signed with. What no item looks at all (Wi-Fi,
+printers, keys ...) is listed under "Moving to a new computer".
 
 Switch items on or off in `config/default.conf`:
 
@@ -314,6 +372,16 @@ exclude     = ~/Scripts/tmp/
   ignore = /org/x/editor/state/  */window-size
            ~/.config/nemo/desktop-metadata:nemo-icon-view-layout-timestamp=
   ```
+- `system`: system files, as full paths outside your home (`/etc/...`).
+  Like those of the built-in `system` item, they are only put back by
+  `sudo ... open`, and never deleted.
+- `special`: what is neither a setting nor a file — `wallpaper` (with
+  the image), `language`, `timezone`, `software` (the list of apps) or
+  `crontab`. The built-in items show how each is used.
+
+Your items have a blue `•` before their name in `seal`, `peek` and
+`diff` (in `diff` also the note `(your own item)`), so you can tell them
+from the built-in ones.
 
 When `diff` keeps showing a line you did not change, a program wrote it
 by itself: add it to your item's `ignore`. If it comes from a built-in
@@ -339,11 +407,11 @@ built-in file is a good start).
    fonts, themes) — their settings then apply right away.
 4. `cinnamon-can open ID` — with sudo and the full path (see "Open a can")
    to include the system files. The computer restarts.
-5. Things cinnamon-can does not handle: printers, Wi-Fi and VPN passwords,
-   Bluetooth pairing, online accounts, browser data, SSH/GPG keys, user
-   groups, firewall, drivers. A Web App's launcher comes along, but its
-   browser profile does not (it holds logins): make the Web App again on
-   the new computer.
+5. Things cinnamon-can does not handle: printers, Wi-Fi and VPN
+   connections (with their passwords), Bluetooth pairing, online accounts,
+   browser data, SSH/GPG keys, user groups, firewall, drivers. A Web
+   App's launcher comes along, but its browser profile does not (it holds
+   logins): make the Web App again on the new computer.
 
 ## Configuration
 
@@ -370,7 +438,8 @@ cinnamon-can -h | --help | help    the list of commands
 
 Exit codes: `0` when all went well (for `diff`: no differences), `1` when
 something failed, `diff` found differences, or you did not confirm `open`;
-`2` for an unknown command.
+`2` for an unknown command; `130` when you stopped it with Ctrl+C (it
+says what that left behind).
 
 ## Inside a can
 
@@ -378,12 +447,13 @@ A can is a `.tar.gz` file with this inside:
 
 | Path | Contents |
 |---|---|
-| `manifest.txt` | ID, kind, label, time, computer, versions, home folder, items |
-| `catalog/` | every item file known when the can was made |
+| `manifest.txt` | ID, kind, label, time, computer, versions, home folder, items (an autocan also names the can it was saved before) |
+| `catalog/` | every item file known when the can was made (`builtin/`, and `user/` for your own) |
 | `items/ITEM/dconf.ini` | the item's settings, in `dconf dump` format |
 | `items/ITEM/home/...` | the item's files, as found in your home folder |
 | `items/ITEM/root/...` | system files (e.g. `root/etc/default/locale`) |
-| `items/ITEM/*.txt` | language, time zone, software list, crontab |
+| `items/ITEM/wallpaper/` | the wallpaper image |
+| `items/ITEM/*.txt` | wallpaper name, language, time zone, software list, crontab |
 
 The log, `~/cinnamon-cans/cinnamon-can.log`, records every `seal` and `open`.
 
