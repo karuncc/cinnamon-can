@@ -37,10 +37,13 @@ cmd_seal() {
     mapfile -t on < <(items_on)
     [ "${#on[@]}" -gt 0 ] || die "Every item is switched off in $(rel_path "$CONF_FILE")"
 
+    # What Ctrl+C says (see on_ctrl_c): a half-made can is removed.
+    CC_CANCEL_NOTE="Cancelled; no can was made."
     info "Reading this computer's settings ..."
     collect_tree "$stage" "${on[@]}"
     package_can "$stage" manual "$label" ""
     log_add "cmd=seal  can=$CAN_ID${label:+  label=\"$label\"}"
+    CC_CANCEL_NOTE="Stopped; the can $(show_id "$CAN_ID") is already sealed."
 
     read_manifest "$stage/manifest.txt"
     say ""
