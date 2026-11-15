@@ -197,20 +197,27 @@ json_list() {
 norm_locale() { tr '[:upper:]' '[:lower:]' | sed 's/\.utf-\{0,1\}8$//; s/@.*$//'; }
 
 # show_missing REFS TREE -> what the can uses that is not installed here
-#   (themes, fonts, apps ...), with commands to install the software:
-#   a warning when something is missing, a plain line when nothing is.
+#   (themes, fonts, apps ...), with commands to install the software.
+#   The heading always starts the same way, so the eye finds it:
+#     INFO  Software, themes and fonts the can uses:
+#           └ All installed on this computer
+#   or, when something is missing, a warning with a table:
+#     WARN  Software, themes and fonts the can uses, not installed here:
+#             TYPE      NAME          USED BY ITEM
+#           └ apt       code          software
 #   (On the normal output, since it is part of a report.)
 show_missing() {
     local refs="$1" tree="$2" kind name where remote apt="" flat="" l
+    local heading="Software, themes and fonts the can uses"
     say ""
     if [ ! -s "$refs" ]; then
-        say "Everything the can uses is installed on this computer."
+        info "$heading:" "${SUB}All installed on this computer"
         return 0
     fi
-    msg_lines "$B_WARN" "Used by the can, but not installed on this computer:"
+    msg_lines "$B_WARN" "$heading, not installed here:"
     table_head 9 "TYPE" 36 "NAME" 0 "USED BY ITEM"
     while IFS=$'\t' read -r kind name where remote; do
-        printf '%s%-9s %-36s %s\n' "$ROW" "$kind" "$name" "$where"
+        printf '%s%-9s %-36s %s%s\n' "$ROW" "$kind" "$name" "$(item_dot "$where")" "$where"
         case "$kind" in
             apt)     apt="$apt $name" ;;
             flatpak) flat="${flat}flatpak install ${remote:-flathub} $name"$'\n' ;;

@@ -58,11 +58,13 @@ tree_items() {
 #     └ Label: before upgrade
 #     └ When:  2026-11-13 14:30:00 +07:00
 #     └ On:    mylaptop (Linux Mint 22.3, Cinnamon 6.6.9, x86_64)
+#   A can without a label shows "Label: (none)", "(none)" in grey.
 #   (The Mint edition is left out: it is always Cinnamon, since
 #   cinnamon-can runs on nothing else.)
 can_header() {
-    local c="${MAN[can.created]}" more=()
-    [ -z "${MAN[can.label]:-}" ] || more+=("${SUB}Label: ${MAN[can.label]}")
+    local c="${MAN[can.created]}" label="${MAN[can.label]:-}" more=()
+    [ -n "$label" ] || label="${C_GREY}(none)${C_RESET}"
+    more+=("${SUB}Label: $label")
     [ -z "${MAN[can.opened]:-}" ] \
         || more+=("${SUB}Kind:  autocan, saved just before opening can $(show_id "${MAN[can.opened]}")")
     more+=("${SUB}When:  ${c:0:10} ${c:11:8} ${c:19}"
@@ -87,7 +89,7 @@ summarize_tree() {
         [ -f "$d/timezone.txt" ] && extra="$extra; time zone $(cat "$d/timezone.txt")"
         [ -f "$d/crontab.txt" ] && extra="$extra; crontab"
         [ -f "$d/software.txt" ] && extra="$extra; $(software_counts "$d/software.txt")"
-        printf '%s%-16s %8s %6s %s\n' "$ROW" "$n" "$settings" "$files" "${extra#; }"
+        printf '%s%s %8s %6s %s\n' "$ROW" "$(item_cell "$n" 16)" "$settings" "$files" "${extra#; }"
     done < <(tree_items "$tree")
 }
 
@@ -130,10 +132,12 @@ show_software() {
 }
 
 # software_row NAME WORDS -> "└ Apps              code composer ..." with
-#   the words wrapped to the width of the screen.
+#   the words wrapped to the width of the screen; "(none)" in grey when
+#   there are no words, so it does not read like a name.
 software_row() {
     printf '%s%-17s ' "$ROW" "$1"
-    printf '%s\n' "${2:-none}" | awk -v room="$(( $(screen_width) - 29 ))" -v pad="$MSG_INDENT                    " '
+    if [ -z "$2" ]; then printf '%s(none)%s\n' "$C_GREY" "$C_RESET"; return 0; fi
+    printf '%s\n' "$2" | awk -v room="$(( $(screen_width) - 29 ))" -v pad="$MSG_INDENT                    " '
         { for (i = 1; i <= NF; i++) {
               if (used > 0 && used + 1 + length($i) > room) { printf "\n%s", pad; used = 0 }
               if (used > 0) { printf " "; used++ }
@@ -158,27 +162,33 @@ cmd_list() {
 
 # list_report -> the whole list, as cmd_list shows it.
 list_report() {
-    local f n=0 size created line skipped=()
+    local f size created kind line skipped=() start
     say ""
     if [ -z "$(all_cans)" ]; then
         info "Cans stored in $(to_tilde "$(backup_dir)"): none yet. Make one with:" "\$ cinnamon-can seal -L \"My first can\""
         return 0
     fi
     info "Cans stored in $(to_tilde "$(backup_dir)"):"
-    # Newest first: "DESC" (descending) on CREATED says so.
-    table_head 6 "ID" 7 "KIND" 16 "CREATED DESC" 12 "HOST" 14 "MINT / CINN." -8 "SIZE" 0 "LABEL"
+    table_head 6 "ID" 7 "KIND" 16 "CREATED" 12 "HOST" 14 "MINT / CINN." -8 "SIZE" 0 "LABEL"
+    # Newest first: the first row gets a grey "Latest:" in the left
+    # column (where the badges are), so the order is clear at a glance.
+    start=" ${C_GREY}Latest:${C_RESET} $SUB"
     while IFS= read -r f; do
-        n=$((n + 1))
         tar -xzOf "$f" ./manifest.txt > "$CC_TMP/m.txt" 2>/dev/null \
-            || { skipped+=("${SUB}$(file_dot "$(basename "$f")")" "${SUB2}Reason: the file cannot be unpacked"); continue; }
+            || { skipped+=("${SUB}$(file_dot "$(basename "$f")")" "${SUB2}The file cannot be unpacked"); continue; }
         read_manifest "$CC_TMP/m.txt"
         manifest_complete \
-            || { skipped+=("${SUB}$(file_dot "$(basename "$f")")" "${SUB2}Reason: its manifest is incomplete"); continue; }
+            || { skipped+=("${SUB}$(file_dot "$(basename "$f")")" "${SUB2}Its manifest is incomplete"); continue; }
         size="$(human_size "$(stat -c %s "$f")")"
         created="${MAN[can.created]:0:16}"
-        printf '%s%s %-7s %-16s %-12s %-14s %8s %s\n' "$ROW" "$(show_id "${MAN[can.id]}")" \
-            "${MAN[can.kind]}" "${created/T/ }" "${MAN[can.hostname]}" \
+        # "manual" in blue: a can you made yourself (blue like the dot of
+        # your own items); an autocan keeps the normal colour.
+        kind="$(printf '%-7s' "${MAN[can.kind]}")"
+        kind="${kind/#manual/${C_BLUE}manual${C_RESET}}"
+        printf '%s%s %s %-16s %-12s %-14s %8s %s\n' "$start" "$(show_id "${MAN[can.id]}")" \
+            "$kind" "${created/T/ }" "${MAN[can.hostname]}" \
             "${MAN[can.mint_release]} / ${MAN[can.cinnamon_version]}" "$size" "${MAN[can.label]:-}"
+        start="$ROW"
     done < <(all_cans)
     # Files that are not readable cans are named after the table, not in it.
     # (On the normal output, so the warning stays in its place on the page.)

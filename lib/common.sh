@@ -19,10 +19,10 @@
 # Colours are used only when the output goes straight to a terminal, never
 # when it is saved to a file or piped into another program.
 
-C_RED="" C_GREEN="" C_YELLOW="" C_BOLD="" C_GREY="" C_RESET=""
+C_RED="" C_GREEN="" C_YELLOW="" C_BLUE="" C_BOLD="" C_GREY="" C_RESET=""
 CC_COLS=""
 if [ -t 1 ]; then
-    C_RED=$'\e[31m' C_GREEN=$'\e[32m' C_YELLOW=$'\e[33m'
+    C_RED=$'\e[31m' C_GREEN=$'\e[32m' C_YELLOW=$'\e[33m' C_BLUE=$'\e[34m'
     C_BOLD=$'\e[1m' C_GREY=$'\e[90m' C_RESET=$'\e[0m'
     # The width of the terminal, for lines that must fit on one screen line.
     CC_COLS="$(stty size </dev/tty 2>/dev/null | cut -d" " -f2)" || true
@@ -55,20 +55,25 @@ MSG_INDENT="         "
 #          $ cinnamon-can seal
 #   (every message line that starts with "$ " is shown this way);
 #   a changed line of a comparison gets a "-" or "+" block (B_MINUS /
-#   B_PLUS); a file that is new or deleted gets NEW or DEL (placed like
-#   the status badges).
+#   B_PLUS); a file that is new or deleted gets "[NEW]" or "[DEL]" (green
+#   or red words, no block, so they do not look like the "+" and "-"
+#   blocks; the same kind of mark as "[DONE]" and "[SUDO REQUIRED]"); the
+#   way back after "open" gets an UNDO badge, with an empty line above and
+#   below, so it stands out. Only the terminal's own colours are used.
 CMD_COL="       ${C_GREY}\$${C_RESET} "
 if [ -t 1 ]; then
     B_MINUS=$'\e[1;97;41m'" - "$'\e[0m'                      # white on red
     B_PLUS=$'\e[1;30;42m'" + "$'\e[0m'                       # black on green
-    B_NEW="   "$'\e[1;30;42m'" NEW "$'\e[0m'" "
-    B_DEL="   "$'\e[1;97;41m'" DEL "$'\e[0m'" "
-    C_ORANGE=$'\e[38;5;208m'
+    B_NEW="   "$'\e[1;32m'"[NEW]"$'\e[0m'" "                    # green words
+    B_DEL="   "$'\e[1;31m'"[DEL]"$'\e[0m'" "                    # red words
+    B_UNDO=$'\e[1;97;45m'"   UNDO "$'\e[0m'" "                 # white on magenta
 else
-    B_MINUS=" - " B_PLUS=" + " B_NEW="     NEW " B_DEL="     DEL " C_ORANGE=""
+    B_MINUS=" - " B_PLUS=" + " B_NEW="   [NEW] " B_DEL="   [DEL] " B_UNDO="   UNDO  "
 fi
-# After a name: what only "sudo cinnamon-can open" can change (orange text).
-B_SUDO="${C_ORANGE}[SUDO REQUIRED]${C_RESET}"
+# What only "sudo cinnamon-can open" can change: the mark after its name,
+# and the colour of its dot in the summary of "diff" (yellow, like WARN).
+C_SUDO="$C_YELLOW"
+B_SUDO="${C_SUDO}[SUDO REQUIRED]${C_RESET}"
 
 # value_word TEXT -> TEXT, but "(default)" (a setting that was never
 #   changed) in grey, so it does not read like a value.
@@ -124,7 +129,8 @@ show_id() {
 
 # table_head WIDTH TEXT [WIDTH TEXT ...] -> a table's heading row, in grey.
 #   A table sits under a message, and each row starts with "└ " (ROW);
-#   the headings are moved by the same 2 spaces so they stand over their
+#   the heading row starts with a small grey dot "• " in the same place
+#   (the node the rows hang from), so the headings stand over their
 #   columns. A negative WIDTH puts the text on the right (for numbers).
 table_head() {
     local w t cell row="" n pad
@@ -137,7 +143,7 @@ table_head() {
         row+="$cell "
     done
     row="${row% }"
-    printf '%s  %s%s%s\n' "$MSG_INDENT" "$C_GREY" "${row%"${row##*[! ]}"}" "$C_RESET"
+    printf '%s%s• %s%s\n' "$MSG_INDENT" "$C_GREY" "${row%"${row##*[! ]}"}" "$C_RESET"
 }
 ROW="$MSG_INDENT$SUB"     # the start of a table row
 

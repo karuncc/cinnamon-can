@@ -108,9 +108,18 @@ LICENSE               MIT
 Every command prints in the same layout (helpers in `lib/common.sh`):
 
 - Two columns: a 9-character left column for a status badge (`info`,
-  `ok`, `warn`, `err`) or a mark, and the right column for everything
+  `ok`, `warn`, `err`) or a mark (`-`/`+`, `[NEW]`/`[DEL]`, and `UNDO` for
+  the way back at the end of `open`), and the right column for everything
   else (`say`). Without a terminal the badges are the same words in the
   same places, without colour.
+- Blocks of colour are for badges and the `-`/`+` of changed lines; a
+  status inside a row is a coloured word in brackets (`[NEW]`, `[DONE]`,
+  `[FAIL]`, `[SUDO REQUIRED]`). Only the terminal's own colours (codes
+  30-37, 40-47, 90-97, 100-107), never 256-colour codes, so everything
+  follows the user's palette.
+- Blue marks what the user made: a blue `•` before the name of a user
+  item wherever an item is named (`item_dot`, `item_cell` for a table
+  column), and `manual` in the list of cans.
 - A line that belongs to the line above starts with a grey `└` (`SUB`,
   `SUB2`); a file name with lines under it gets a yellow `•`
   (`file_dot`). A table is a message, a grey heading row (`table_head`)
