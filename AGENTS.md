@@ -118,12 +118,18 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   30-37, 40-47, 90-97, 100-107), never 256-colour codes, so everything
   follows the user's palette.
 - Blue marks what the user made: a blue `•` before the name of a user
-  item wherever an item is named (`item_dot`, `item_cell` for a table
-  column), and `manual` in the list of cans.
+  item wherever an item is named (`item_dot`, and `item_cell` for a table
+  column, both in `lib/items.sh`), and `manual` in the list of cans.
 - A line that belongs to the line above starts with a grey `└` (`SUB`,
   `SUB2`); a file name with lines under it gets a yellow `•`
-  (`file_dot`). A table is a message, a grey heading row (`table_head`)
-  and rows that start with `└` (`ROW`).
+  (`file_dot`). A table is a message, a grey heading row (`table_head`;
+  it starts with a grey `•`, the point its rows hang from) and rows that
+  start with `└` (`ROW`).
+- Ctrl+C always ends on a new line that says what it left behind
+  (`on_ctrl_c`: "Cancelled; nothing was changed."). A command sets
+  `CC_CANCEL_NOTE` when stopping means more than that (`seal`), and
+  switches Ctrl+C off (`trap '' INT`) while it writes something that must
+  not be left half done (`open`).
 - A command for the user to type is a message line that starts with
   `$ `: it gets a grey `$` in the left column and can be copied as it is.
   Can IDs go through `show_id` (grey block, or `[ID]`), but never inside
