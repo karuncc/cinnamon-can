@@ -24,6 +24,8 @@
 source "$CC_ROOT/lib/collect.sh"
 # shellcheck source=lib/list.sh
 source "$CC_ROOT/lib/list.sh"
+# shellcheck source=lib/refs.sh
+source "$CC_ROOT/lib/refs.sh"
 
 WALLPAPER_COPY_DIR=".local/share/backgrounds/cinnamon-can"
 
@@ -40,6 +42,37 @@ CMP_MINUS="" CMP_PLUS="" CMP_RESULT="" CMP_REPORT="" CMP_TOTAL=0 CMP_SYSTEM=0
 CMP_PLUS_ID=""
 CMP_ITEMS=()
 
+# version_notes -> what differs between the opened can (MAN) and this
+#   computer, one line each (nothing when it all matches).
+version_notes() {
+    [ "${MAN[can.mint_release]:-}" = "$SYS_RELEASE" ] || echo "Linux Mint ${MAN[can.mint_release]:-?} in the can, $SYS_RELEASE here"
+    [ "${MAN[can.mint_edition]:-}" = "$SYS_EDITION" ] || echo "${MAN[can.mint_edition]:-?} edition in the can, $SYS_EDITION here"
+    [ "${MAN[can.cinnamon_version]:-}" = "$SYS_CINNAMON" ] || echo "Cinnamon ${MAN[can.cinnamon_version]:-?} in the can, $SYS_CINNAMON here"
+    [ "${MAN[can.arch]:-}" = "$SYS_ARCH" ] || echo "${MAN[can.arch]:-?} in the can, $SYS_ARCH here"
+    return 0
+}
+
+# versions_between ID RELEASE EDITION CINNAMON ARCH -> like version_notes,
+#   but between the opened can (MAN) and another can (ID and its versions).
+versions_between() {
+    local a b
+    a="can $(show_id "${MAN[can.id]}")" b="can $(show_id "$1")"
+    [ "${MAN[can.mint_release]:-?}" = "$2" ] || echo "Linux Mint ${MAN[can.mint_release]:-?} in $a, $2 in $b"
+    [ "${MAN[can.mint_edition]:-?}" = "$3" ] || echo "${MAN[can.mint_edition]:-?} edition in $a, $3 in $b"
+    [ "${MAN[can.cinnamon_version]:-?}" = "$4" ] || echo "Cinnamon ${MAN[can.cinnamon_version]:-?} in $a, $4 in $b"
+    [ "${MAN[can.arch]:-?}" = "$5" ] || echo "${MAN[can.arch]:-?} in $a, $5 in $b"
+    return 0
+}
+
+# show_version_notes NOTES [TITLE] -> the version differences as one
+#   warning (on the normal output, since it is part of a report).
+show_version_notes() {
+    [ -n "$1" ] || return 0
+    local lines=() l
+    while IFS= read -r l; do lines+=("${SUB}$l"); done <<< "$1"
+    msg_lines "$B_WARN" "${2:-Differs from this computer:}" "${lines[@]}"
+}
+
 # build_comparison CAN [CAN2]
 build_comparison() {
     local plus_can minus_can="" minus_label notes n m_id="" notes_title="Differs from this computer:"
@@ -53,7 +86,7 @@ build_comparison() {
     open_can "$plus_can" "$CC_TMP/can-plus"
     CMP_PLUS_ID="${MAN[can.id]}"
     local plus_home="${MAN[can.home]}" plus_label
-    plus_label="Can $(show_id "${MAN[can.id]}")${MAN[can.label]:+ (label: ${MAN[can.label]})}"
+    plus_label="Can $(show_id "${MAN[can.id]}")${MAN[can.label]:+ (Label: ${MAN[can.label]})}"
     notes="$(version_notes)"
     # Kept for a second can, whose manifest replaces MAN below.
     local p_id="${MAN[can.id]}" p_rel="${MAN[can.mint_release]:-?}" p_ed="${MAN[can.mint_edition]:-?}"
@@ -78,7 +111,7 @@ build_comparison() {
         open_can "$minus_can" "$CC_TMP/can-minus"
         local minus_home="${MAN[can.home]}"
         m_id="${MAN[can.id]}"
-        minus_label="Can $(show_id "$m_id")${MAN[can.label]:+ (label: ${MAN[can.label]})}"
+        minus_label="Can $(show_id "$m_id")${MAN[can.label]:+ (Label: ${MAN[can.label]})}"
         notes="$(versions_between "$p_id" "$p_rel" "$p_ed" "$p_cin" "$p_arch")"
         notes_title="The two cans were made on different versions:"
         resplit_tree "$CC_TMP/can-minus" "$CC_TMP/can-minus-split" "$CC_TMP/can-plus"
@@ -439,19 +472,21 @@ show_path() {
 # The report shows each item as a heading, and under it one entry per
 # setting or file that differs (a file with a yellow dot):
 #
-#          appearance
-#          └ /org/cinnamon/desktop/interface/font-name
-#        -     'Waree 11'
-#        +     'Ubuntu 11'
-#          └ • ~/.config/cinnamon/spices/calendar@cinnamon.org/13.json  (+1 | -1)
-#            10  "tooltip": "Check this to display events in the calendar.",
-#        -   11  "value": true
-#        +   11  "value": false
-#      NEW └ • ~/.config/cinnamon/spices/calendar@cinnamon.org/99.json  (+3 | -0)
+#         appearance
+#         └ /org/cinnamon/desktop/interface/font-name
+# -         'Waree 11'
+# +         'Ubuntu 11'
+#         └ • ~/.config/cinnamon/spices/calendar@cinnamon.org/13.json  (+1 | -1)
+#      10   "tooltip": "Check this to display events in the calendar.",
+# -    11   "value": true
+# +    11   "value": false
+#   [NEW] └ • ~/.config/cinnamon/spices/calendar@cinnamon.org/99.json  (+3 | -0)
 #
 # The "-" side is this computer (or the first can), the "+" side the can.
-# Lines of a file carry their line number in grey; "⋯" marks lines left
-# out between two changed parts. What needs sudo is marked SUDO REQUIRED.
+# In the left column: the "-"/"+" block first (settings and files alike),
+# then the line number of a file's line in grey; so the text of every
+# changed line starts in the same place (column 12). "⋯" marks lines left
+# out between two changed parts. What needs sudo is marked [SUDO REQUIRED].
 
 render_diff() {
     local n
@@ -484,7 +519,7 @@ render_item() {
         o = ($2 == "setting") ? 1 : ($2 == "file") ? 2 : ($2 == "crontab") ? 3 : 4
         print o "\t" $0 }' "$CMP_RESULT" | sort -t$'\t' -k1,1n -k4,4 | cut -f2- > "$result"
     say ""
-    say "${C_BOLD}$n${C_RESET}$(item_note "$n")"
+    say "$(item_dot "$n")${C_BOLD}$n${C_RESET}$(item_note "$n")"
     while IFS=$'\t' read -r it kind path state va vb; do
         tag=""
         [ "$kind" != "system" ] && [ "$path" != "(time zone)" ] || tag=" $B_SUDO"
@@ -528,12 +563,12 @@ render_item() {
     done < "$result"
 }
 
-# change_line -|+ TEXT -> one changed value, with its badge in the left
-#   column (no line number: settings have none).
+# change_line -|+ TEXT -> one changed value, with its badge at the start
+#   of the left column (no line number: settings have none).
 change_line() {
     local badge="$B_MINUS" colour="$C_RED"
     [ "$1" = "-" ] || { badge="$B_PLUS"; colour="$C_GREEN"; }
-    printf '     %s   %s%s%s\n' "$badge" "$colour" "$2" "$C_RESET"
+    printf '%s        %s%s%s\n' "$badge" "$colour" "$2" "$C_RESET"
 }
 
 # line_counts OLD NEW -> "  (+12 | -0)" for a new text file of 12 lines (each
@@ -548,10 +583,10 @@ line_counts() {
 }
 
 # diff_body [MAP_A MAP_B] -> the body of a "diff -u" (read from the input,
-#   without its first 2 lines): every changed line with a "-"/"+" badge in
-#   the left column; in the right column the line number in grey, then
-#   the text. The MAPs turn
-#   a shown line number into the real one (when lines were left out).
+#   without its first 2 lines). In the left column the "-"/"+" badge of a
+#   changed line, then the line number in grey; the text starts where a
+#   setting's value does (column 12). The MAPs turn a shown line number
+#   into the real one (when lines were left out).
 diff_body() {
     awk -v ma="${1:-}" -v mb="${2:-}" -v grey="$C_GREY" -v red="$C_RED" -v green="$C_GREEN" \
         -v off="$C_RESET" -v bm="$B_MINUS" -v bp="$B_PLUS" '
@@ -560,17 +595,18 @@ diff_body() {
         function real_a(n) { return (ma != "" && n in A) ? A[n] : n }
         function real_b(n) { return (mb != "" && n in B) ? B[n] : n }
         /^@@/ { o = substr($2, 2) + 0; n = substr($3, 2) + 0
-                if (hunks++) printf "            %s⋯%s\n", grey, off
+                if (hunks++) printf "       %s⋯%s\n", grey, off
                 next }
-        /^\\/ { printf "               %s%s%s\n", grey, substr($0, 3), off; next }
+        /^\\/ { printf "           %s%s%s\n", grey, substr($0, 3), off; next }
         { c = substr($0, 1, 1); t = substr($0, 2) }
-        c == "-" { printf "     %s %s%4s%s  %s%s%s\n", bm, grey, real_a(o), off, red, t, off; o++; next }
-        c == "+" { printf "     %s %s%4s%s  %s%s%s\n", bp, grey, real_b(n), off, green, t, off; n++; next }
-                 { printf "         %s%4s%s  %s\n", grey, real_b(n), off, t; o++; n++ }'
+        c == "-" { printf "%s %s%4s%s   %s%s%s\n", bm, grey, real_a(o), off, red, t, off; o++; next }
+        c == "+" { printf "%s %s%4s%s   %s%s%s\n", bp, grey, real_b(n), off, green, t, off; n++; next }
+                 { printf "    %s%4s%s   %s\n", grey, real_b(n), off, t; o++; n++ }'
 }
 
 # summary_line -> what differs, one row per kind, with a coloured dot:
-#   green = nothing, yellow = differs, orange = needs sudo, red = missing.
+#   green = nothing, yellow = differs (system changes: the colour of
+#   [SUDO REQUIRED], also yellow), red = missing.
 summary_line() {
     local s f y m
     # The time zone needs sudo, so it counts as a system change here --
@@ -582,7 +618,7 @@ summary_line() {
     info "Summary of the comparison above:" \
         "${SUB}$(status_dot "$s" "$C_YELLOW") $s setting(s) differ" \
         "${SUB}$(status_dot "$f" "$C_YELLOW") $f file(s) differ" \
-        "${SUB}$(status_dot "$y" "$C_ORANGE") $y system change(s) differ (only with sudo)" \
+        "${SUB}$(status_dot "$y" "$C_SUDO") $y system change(s) differ (only with sudo)" \
         "${SUB}$(status_dot "$m" "$C_RED") $m thing(s) used by the can but not installed here (listed above)"
 }
 

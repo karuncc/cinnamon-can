@@ -92,18 +92,18 @@ cinnamon-can list
 
 ```
    INFO  Cans stored in ~/cinnamon-cans:
-           ID     KIND    CREATED DESC     HOST         MINT / CINN.       SIZE LABEL
-         └ [R4T8] autocan 2026-11-13 15:05 mylaptop     22.3 / 6.6.9   402.1 KB Before opening K7Q2
+         • ID     KIND    CREATED          HOST         MINT / CINN.       SIZE LABEL
+ Latest: └ [R4T8] autocan 2026-11-13 15:05 mylaptop     22.3 / 6.6.9   402.1 KB Before opening K7Q2
          └ [K7Q2] manual  2026-11-13 14:30 mylaptop     22.3 / 6.6.9   410.4 KB Before upgrade
 
    INFO  Latest applied on this computer: can [K7Q2]
          └ 2026-11-13T15:05, system files restored
 ```
 
-`manual` cans are the ones you made. An `autocan` is made by `open` just
-before it changes anything — it is your undo. The newest can comes first
-(`CREATED DESC`). IDs can be typed in lower case. Wherever a command takes
-a CAN you may also give the path of a can file.
+`manual` cans are the ones you made (blue in a terminal). An `autocan` is
+made by `open` just before it changes anything — it is your undo. The
+newest can comes first, marked `Latest:`. IDs can be typed in lower case.
+Wherever a command takes a CAN you may also give the path of a can file.
 
 ### Look inside a can
 
@@ -112,9 +112,9 @@ cinnamon-can peek K7Q2
 ```
 
 Shows when and on which computer and versions the can was made, every
-item, the list of software you had installed (in a terminal, what is not
-installed here is yellow), and what the can uses that this computer has
-not installed.
+item, and the list of software you had installed. It shows only the can:
+what differs from this computer (other versions, and what the can uses
+that is not installed here) is shown by `diff`.
 
 ### Compare
 
@@ -127,36 +127,36 @@ cinnamon-can diff K7Q2 R4T8     # can K7Q2 (-) against can R4T8 (+)
    INFO  Reading this computer's settings ...
    INFO  Comparing:
          (-) This computer
-         (+) Can [K7Q2] (label: Before upgrade)
+         (+) Can [K7Q2] (Label: Before upgrade)
 
          keyboard
          └ /org/cinnamon/desktop/keybindings/wm/close
-      -    ['<Alt>F4']
-      +    ['<Super>q']
+ -         ['<Alt>F4']
+ +         ['<Super>q']
          └ /org/cinnamon/desktop/peripherals/keyboard/repeat-interval
-      -    uint32 30
-      +    (default)
+ -         uint32 30
+ +         (default)
 
          panel
          └ • ~/.config/cinnamon/spices/calendar@cinnamon.org/13.json  (+1 | -1)
-           10          "tooltip": "Check this to display events in the calendar.",
-      -    11          "value": true
-      +    11          "value": false
-           12      },
-     NEW └ • ~/.config/cinnamon/spices/calendar@cinnamon.org/99.json  (+3 | -0)
+      10           "tooltip": "Check this to display events in the calendar.",
+ -    11           "value": true
+ +    11           "value": false
+      12       },
+   [NEW] └ • ~/.config/cinnamon/spices/calendar@cinnamon.org/99.json  (+3 | -0)
 
          system
          └ • /etc/default/locale [SUDO REQUIRED]  (+1 | -1)
-      -     1  LANG=en_US.UTF-8
-      +     1  LANG=th_TH.UTF-8
+ -     1   LANG=en_US.UTF-8
+ +     1   LANG=th_TH.UTF-8
 
          hardware (optional item)
          └ /org/cinnamon/desktop/interface/text-scaling-factor
-      -    1.0
-      +    1.25
+ -         1.0
+ +         1.25
 
-   WARN  Used by the can, but not installed on this computer:
-           TYPE      NAME                                 USED BY ITEM
+   WARN  Software, themes and fonts the can uses, not installed here:
+         • TYPE      NAME                                 USED BY ITEM
          └ apt       code                                 software
          └ apt       gimp                                 software
 
@@ -176,15 +176,16 @@ How to read it:
   or green block in a terminal).
 - Each item is a heading. Under it, `└ /...` is a setting and `└ • ~/...`
   a file, with `(+N | -N)`: how many lines the can adds and removes. The
-  grey numbers are line numbers in the file.
+  grey numbers next to the `-`/`+` are line numbers in the file.
 - `(default)` means the setting is at Cinnamon's default on that side.
-- `NEW` / `DEL`: files only one side has. This is normal — for example a
+- `[NEW]` / `[DEL]`: files only one side has. This is normal — for example a
   theme you installed, or an applet only one panel has.
 - Changed **values** are normal. A changed **shape** (a setting name or a
   file's structure that looks different) usually means the two sides run
   different Cinnamon versions.
 - Optional items and your own items come last, marked `(optional item)`
-  or `(your own item)`.
+  or `(your own item)`; your own items also have a blue `•` before their
+  name wherever an item is named.
 - Two cans are compared item by item as the `+` can sorts things, so a
   setting or file that one can keeps in an item of your own and the other
   in a built-in item is not shown twice. A file of the `-` can that no
@@ -195,9 +196,10 @@ How to read it:
 - What programs write by themselves (where a window was, a time stamp) is
   not shown: built-in items `ignore` it, and you can add more (see "Your
   own items").
-- "Used by the can, but not installed on this computer" lists the themes,
-  fonts, apps and packages the can names but this computer lacks, with the
-  item that uses each one. They are never installed for you.
+- "Software, themes and fonts the can uses" is always shown: `All
+  installed on this computer`, or a warning that lists the themes, fonts,
+  apps and packages the can names but this computer lacks, with the item
+  that uses each one. They are never installed for you.
 
 `diff`, `open` and `list` show long output page by page with `less`; set
 `PAGER` to use another program.
@@ -214,7 +216,7 @@ cinnamon-can open K7Q2
 3. Saves the current state as an `autocan` (your undo).
 4. Makes this computer match the can: files first, then settings, your
    language, and asks the input method (fcitx) to reload. Files the can does
-   not have are removed (they were shown as `DEL`). The old home folder
+   not have are removed (they were shown as `[DEL]`). The old home folder
    (`/home/olduser/...`) is replaced by yours everywhere. A wallpaper image
    this computer does not have is copied to
    `~/.local/share/backgrounds/cinnamon-can/`.
@@ -332,11 +334,10 @@ built-in file is a good start).
 2. Old computer: `cinnamon-can seal -L "Move"`, then copy the can (from
    `~/cinnamon-cans/`) to the new computer's `~/cinnamon-cans/`.
 3. New computer: get cinnamon-can, create the config, then
-   `cinnamon-can peek ID` and install what it lists as not installed (apps,
+   `cinnamon-can diff ID` and install what it lists as not installed (apps,
    fonts, themes) — their settings then apply right away.
-4. `cinnamon-can diff ID`, then `cinnamon-can open ID` — with sudo and the
-   full path (see "Open a can") to include the system files. The computer
-   restarts.
+4. `cinnamon-can open ID` — with sudo and the full path (see "Open a can")
+   to include the system files. The computer restarts.
 5. Things cinnamon-can does not handle: printers, Wi-Fi and VPN passwords,
    Bluetooth pairing, online accounts, browser data, SSH/GPG keys, user
    groups, firewall, drivers. A Web App's launcher comes along, but its

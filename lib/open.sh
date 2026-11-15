@@ -66,13 +66,16 @@ cmd_open() {
 
     say ""
     info "Applying changes from the can $(show_id "$can_id") to this computer ..."
-    apply_files    || problems=1
-    apply_settings || problems=1
-    apply_language || problems=1
+    run_step "Files"    apply_files    || problems=1
+    run_step "Settings" apply_settings || problems=1
+    # The language only when the can changes it.
+    if [ -n "$(result_paths setting changed added | grep -F '(language)' || true)" ]; then
+        run_step "Language" apply_language || problems=1
+    fi
     system_state="none"
     if [ "$CMP_SYSTEM" -gt 0 ]; then
         if [ "$with_system" = "1" ]; then
-            apply_system && system_state="restored" || { system_state="failed"; problems=1; }
+            run_step "System files" apply_system && system_state="restored" || { system_state="failed"; problems=1; }
         else
             system_state="skipped"
         fi
@@ -85,7 +88,11 @@ cmd_open() {
     if [ "$problems" -eq 0 ]; then ok "This computer's settings now match the can $(show_id "$can_id")"
     else warn "Some changes could not be made (see above)"; fi
     [ "$system_state" != "skipped" ] || warn "System files were not changed; for them run:" "\$ $sudo_cmd"
-    info "To undo, run:" "\$ cinnamon-can open $undo_id"
+    # The way back, on its own with an empty line above and below, so it
+    # is easy to find (and to copy) even while the countdown runs.
+    say ""
+    msg_lines "$B_UNDO" "To go back to how this computer was, run:" "\$ cinnamon-can open $undo_id"
+    say ""
     restart_countdown
 }
 
@@ -102,27 +109,57 @@ result_paths() {
     awk -F'\t' -v k="$kind" -v s=" $* " '$2 == k && index(s, " " $4 " ") { print $1 "\t" $3 }' "$CMP_RESULT"
 }
 
+# Each step of writing (apply_files, apply_settings, apply_language,
+# apply_system) returns 1 when something went wrong, and adds one line per
+# problem to REASONS. The messages of the programs it runs (tar, dconf ...)
+# are kept in APPLY_ERR, so they do not break the layout of the screen.
+REASONS=()
+APPLY_ERR=""
+
+# run_step NAME FUNCTION -> runs one step, then shows its row:
+#     └ • Files            [DONE]
+#     └ • Settings         [FAIL]
+#       └ appearance: error: The connection is closed
+#   The dot and the word are green for DONE and red for FAIL. (Words, not
+#   badges: a row is a detail of the "Applying changes" message.)
+run_step() {
+    local st=0 c="$C_GREEN" word="DONE" r
+    REASONS=() APPLY_ERR="$CC_TMP/apply-err.txt"
+    "$2" || st=1
+    [ "$st" -eq 0 ] || { c="$C_RED"; word="FAIL"; }
+    say "${SUB}${c}•${C_RESET} $(printf '%-16s' "$1") ${c}[$word]${C_RESET}"
+    for r in "${REASONS[@]+"${REASONS[@]}"}"; do say "${SUB2}$r"; done
+    return "$st"
+}
+
+# why WHAT TEXT -> one problem for REASONS: "WHAT: " and the first line the
+#   program wrote to APPLY_ERR, or TEXT when it wrote nothing.
+why() {
+    local l
+    l="$(head -n 1 "$APPLY_ERR" 2>/dev/null)" || true
+    REASONS+=("$1: ${l:-$2}")
+}
+
 apply_files() {
     local n rel list="$CC_TMP/apply-files.txt" bad=0
     # New and changed files, copied item by item (symlinks and permissions kept).
     for n in "${CMP_ITEMS[@]}"; do
         result_paths file changed added | awk -F'\t' -v i="$n" '$1 == i { print substr($2, 6) }' > "$list"
         [ -s "$list" ] || continue
-        tar -C "$CMP_PLUS/items/$n/home" --no-recursion -cf - -T "$list" | tar -C "$HOME" -xf - \
-            || { err "Some files of $n could not be written"; bad=1; }
+        { tar -C "$CMP_PLUS/items/$n/home" --no-recursion -cf - -T "$list" | tar -C "$HOME" -xf - ; } 2> "$APPLY_ERR" \
+            || { why "$(item_dot "$n")$n" "some files could not be written"; bad=1; }
     done
     # Files the can does not have.
     while IFS=$'\t' read -r n rel; do
-        rm -f -- "$HOME/${rel#home/}" || bad=1
+        rm -f -- "$HOME/${rel#home/}" 2> "$APPLY_ERR" || { why "$(item_dot "$n")$n" "~/${rel#home/} could not be removed"; bad=1; }
     done < <(result_paths file removed)
     # The crontab.
     while IFS=$'\t' read -r n rel; do
-        crontab "$CMP_PLUS/items/$n/crontab.txt" || { err "Could not install the crontab"; bad=1; }
+        crontab "$CMP_PLUS/items/$n/crontab.txt" 2> "$APPLY_ERR" || { why "crontab" "it could not be installed"; bad=1; }
     done < <(result_paths crontab changed added)
     while IFS=$'\t' read -r n rel; do
         crontab -r 2>/dev/null || true
     done < <(result_paths crontab removed)
-    [ "$bad" -eq 0 ] && ok "Files"
     return "$bad"
 }
 
@@ -131,20 +168,21 @@ apply_settings() {
     for n in "${CMP_ITEMS[@]}"; do
         # Settings this computer has but the can does not: back to default.
         while IFS=$'\t' read -r _ path; do
-            [[ "$path" == /* ]] && { dconf reset "$path" || bad=1; }
+            [[ "$path" == /* ]] || continue
+            dconf reset "$path" 2> "$APPLY_ERR" || { why "$(item_dot "$n")$n" "$path could not be reset"; bad=1; }
         done < <(result_paths setting removed | awk -F'\t' -v i="$n" '$1 == i')
         if [ -f "$CMP_PLUS/items/$n/dconf.ini" ] && grep -q "^$n	setting	/" "$CMP_RESULT"; then
-            dconf load / < "$CMP_PLUS/items/$n/dconf.ini" || { err "Some settings of $n could not be loaded"; bad=1; }
+            dconf load / < "$CMP_PLUS/items/$n/dconf.ini" 2> "$APPLY_ERR" \
+                || { why "$(item_dot "$n")$n" "the settings could not be loaded"; bad=1; }
         fi
     done
-    [ "$bad" -eq 0 ] && ok "Settings"
     return "$bad"
 }
 
 # The language of your account is set through AccountsService, the same
 # way System Settings > Languages does it (no sudo needed).
 apply_language() {
-    local n path value method bad=0 done=0
+    local n path value method bad=0
     while IFS=$'\t' read -r n path; do
         value="$(awk -F'\t' -v i="$n" -v p="$path" '$1 == i && $3 == p { print $6 }' "$CMP_RESULT")"
         # "(default)" means the can has no value stored (see compare_views).
@@ -155,11 +193,9 @@ apply_language() {
             *) continue ;;
         esac
         busctl call org.freedesktop.Accounts "/org/freedesktop/Accounts/User$(id -u)" \
-            org.freedesktop.Accounts.User "$method" s "$value" >/dev/null \
-            || { err "Could not set $path to $value"; bad=1; }
-        done=1
+            org.freedesktop.Accounts.User "$method" s "$value" >/dev/null 2> "$APPLY_ERR" \
+            || { why "${path#"(language) "} $value" "it could not be set"; bad=1; }
     done < <(result_paths setting changed added | grep -F '(language)' || true)
-    [ "$done" -eq 0 ] || [ "$bad" -ne 0 ] || ok "Language"
     return "$bad"
 }
 
@@ -170,14 +206,13 @@ apply_system() {
     while IFS=$'\t' read -r n rel; do
         dest="/${rel#root/}"
         mode="$(stat -c %a "$dest" 2>/dev/null || echo 644)"
-        sudo install -D -m "$mode" -o root -g root "$CMP_PLUS/items/$n/$rel" "$dest" \
-            || { err "Could not write $dest"; bad=1; }
+        sudo install -D -m "$mode" -o root -g root "$CMP_PLUS/items/$n/$rel" "$dest" 2> "$APPLY_ERR" \
+            || { why "$dest" "it could not be written"; bad=1; }
     done < <(result_paths system changed added)
     tz="$(awk -F'\t' '$3 == "(time zone)" && $4 != "removed" { print $6; exit }' "$CMP_RESULT")"
     if [ -n "$tz" ]; then
-        sudo timedatectl set-timezone "$tz" || { err "Could not set the time zone to $tz"; bad=1; }
+        sudo timedatectl set-timezone "$tz" 2> "$APPLY_ERR" || { why "Time zone $tz" "it could not be set"; bad=1; }
     fi
-    [ "$bad" -eq 0 ] && ok "System files"
     return "$bad"
 }
 

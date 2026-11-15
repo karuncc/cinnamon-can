@@ -218,6 +218,19 @@ item_has() { [[ " ${ITEM_SPECIAL[$1]:-} " == *" $2 "* ]]; }
 #   own items, optional items) comes last in a diff, marked as such.
 is_main_item() { [ "${ITEM_SRC[$1]:-}" = "builtin" ] && [ "${ITEM_DEFAULT[$1]:-}" = "on" ]; }
 
+# item_dot NAME -> "• " in blue before the name of one of your own items
+#   (blue: what you made yourself, like "manual" in the list of cans);
+#   nothing for a built-in item.
+item_dot() { [ "${ITEM_SRC[$1]:-}" != "user" ] || printf '%s•%s ' "$C_BLUE" "$C_RESET"; }
+
+# item_cell NAME WIDTH -> the name with item_dot, padded with spaces to
+#   WIDTH characters (for a column of a table).
+item_cell() {
+    local shown="${#1}"
+    [ "${ITEM_SRC[$1]:-}" != "user" ] || shown=$((shown + 2))
+    printf '%s%s%*s' "$(item_dot "$1")" "$1" $(( $2 > shown ? $2 - shown : 0 )) ''
+}
+
 # items_in_order -> your own items first (they win ties), then built-in.
 items_in_order() {
     local n
