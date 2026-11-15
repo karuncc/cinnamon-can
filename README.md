@@ -251,9 +251,11 @@ cinnamon-can open K7Q2
    comes from another Mint or Cinnamon version.
 2. Asks you to type `yes`. Anything else, or Ctrl+C, changes nothing.
 3. Saves the current state as an `autocan` (your undo).
-4. Makes this computer match the can: files first, then settings, your
-   language, and asks the input method (fcitx) to reload. Files the can does
-   not have are removed (they were shown as `[DEL]`). The old home folder
+4. Makes this computer match the can: files first, then settings and your
+   language. If fcitx is running, it is asked to reload, so it does not
+   write its old settings back (ibus keeps its settings among the others
+   and needs nothing more). Files the can does not have are removed (they
+   were shown as `[DEL]`). The old home folder
    (`/home/olduser/...`) is replaced by yours everywhere. A wallpaper image
    this computer does not have is copied to
    `~/.local/share/backgrounds/cinnamon-can/`. Each step shows `[DONE]`,
