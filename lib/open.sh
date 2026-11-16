@@ -15,8 +15,9 @@
 #      (they were listed as "deleted" in the comparison); system files are
 #      never deleted. Ctrl+C is switched off while this runs (a few
 #      seconds), so the computer is never left half old, half new.
-#   5. Write the log, show how to undo, and restart the computer after a
-#      10-second countdown (Ctrl+C cancels the restart).
+#   5. Write the log, show how to undo, and ask whether to restart now:
+#      "yes" restarts, anything else (or Ctrl+C) leaves it to you. Either
+#      way "open" ends with 1 when some changes could not be made.
 #   Ctrl+C before step 4 stops with "Cancelled; nothing was changed."
 
 # shellcheck source=lib/diff.sh
@@ -53,7 +54,7 @@ cmd_open() {
     say ""
     [ -t 0 ] || die "Command \"open\" needs to be confirmed in a terminal"
     # (Ctrl+D ends the input: read fails, which counts as "no", not as a silent stop.)
-    read -r -p "${MSG_INDENT}Type \"yes\" to apply these changes and restart the computer: " answer || { say ""; answer=""; }
+    read -r -p "${MSG_INDENT}Type \"yes\" to apply these changes: " answer || { say ""; answer=""; }
     [ "$answer" = "yes" ] || { info "Cancelled; nothing was changed."; return 1; }
 
     # Save the current state first, shown the same way "seal" shows a can.
@@ -67,7 +68,7 @@ cmd_open() {
     show_sealed "The autocan is sealed:"
 
     # From here on Ctrl+C is switched off (programs started from here, such
-    # as "dconf load", ignore it too) until the restart countdown, which
+    # as "dconf load", ignore it too) until the restart question, which
     # has its own: stopping halfway would leave a mix of old and new.
     trap '' INT
     say ""
@@ -96,11 +97,11 @@ cmd_open() {
     else warn "Some changes could not be made (see above)"; fi
     [ "$system_state" != "skipped" ] || warn "System files were not changed; for them run:" "\$ $sudo_cmd"
     # The way back, on its own with an empty line above and below, so it
-    # is easy to find (and to copy) even while the countdown runs.
+    # is easy to find (and to copy) right above the restart question.
     say ""
     msg_lines "$B_UNDO" "To go back to how this computer was, run:" "\$ cinnamon-can open $undo_id"
     say ""
-    restart_countdown
+    ask_restart "$problems"
 }
 
 
@@ -234,15 +235,29 @@ reload_input_methods() {
     fi
 }
 
-# Restart, like Timeshift does after a restore: the desktop reads every
-# setting fresh. Ctrl+C during the countdown cancels the restart only.
-restart_countdown() {
-    local i
-    trap 'say ""; warn "Restart cancelled." "Please restart (or log out and in) yourself soon."; exit 0' INT
-    for i in 10 9 8 7 6 5 4 3 2 1; do
-        printf '\r%sRestarting in %2d second(s) (Ctrl+C to cancel) ' "$B_INFO" "$i"
-        sleep 1
-    done
-    say ""
-    systemctl reboot || die "Could not restart; please restart yourself"
+# Ask whether to restart now. After a restart the desktop reads every
+# setting fresh (Timeshift restarts after a restore for the same reason),
+# but other open windows may hold unsaved work, so the choice is yours:
+# only "yes" restarts. Anything else, the end of the input (Ctrl+D) or
+# Ctrl+C leaves the restart to you, with a reminder how to do it.
+#   ask_restart STATUS -> STATUS is what "open" ends with, whatever the
+#   answer: 1 when some changes could not be made, else 0. (Ctrl+C here
+#   is a "no", not a stop: the writing is already finished.)
+ask_restart() {
+    local answer status="${1:-0}"
+    trap 'say ""; not_restarted; exit '"$status" INT
+    info "The desktop shows some changes only after a restart."
+    read -r -p "${MSG_INDENT}Type \"yes\" to restart now: " answer || { say ""; answer=""; }
+    trap '' INT
+    if [ "$answer" = "yes" ]; then
+        info "Restarting ..."
+        systemctl reboot || die "Could not restart; please restart yourself"
+    else
+        not_restarted
+    fi
+    return "$status"
+}
+
+not_restarted() {
+    warn "Not restarted." "Please restart (or log out and in) yourself soon. To restart, run:" "\$ systemctl reboot"
 }

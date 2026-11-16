@@ -10,7 +10,7 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
 - `seal [-L TEXT]` makes a can, `list` shows cans, `peek CAN` shows what is
   inside, `diff CAN [CAN2]` compares, `open CAN` makes the computer match a
   can (shows the diff, asks for `yes`, saves an "autocan" first, then
-  restarts the computer).
+  asks whether to restart the computer).
 - Goal: after `open` on another computer, the desktop looks, is arranged
   and feels (mouse, keyboard) exactly the same, except for apps that are
   installed differently. Personal things and pure hardware (screens,
@@ -149,7 +149,8 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   It needs no set-up, writes only into its own temporary folder, and
   never touches the real backup folder or any setting: `open` is only
   exercised in the two cases where it stops by itself, with closed input
-  and a fake `systemctl` first in PATH. A few tests compare a can against
+  and a fake `systemctl` first in PATH; its restart question is tried on
+  its own, with that fake. A few tests compare a can against
   the LIVE computer and can fail when a setting changes mid-run — run the
   script again before hunting for a bug. New behaviour should come with a
   new check in this script.
@@ -163,7 +164,7 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   (`/usr/share/glib-2.0/schemas/`) for window sizes, "last", "recent" and
   "history".
 - NOT covered by the script: really applying a can (`open` + `yes`),
-  sudo, language, system files and the restart. For those, the rules
+  sudo, language, system files and the restart itself. For those, the rules
   below apply.
 - On the development machine run only `seal`, `list`, `peek`, `diff`, and
   `open` on a can that already matches (it stops before asking). **Never
