@@ -10,7 +10,8 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
 - `seal [-L TEXT]` makes a can, `list` shows cans, `peek CAN` shows what is
   inside, `diff CAN [CAN2]` compares, `open CAN` makes the computer match a
   can (shows the diff, asks for `yes`, saves an "autocan" first, then
-  asks whether to restart the computer).
+  asks whether to restart the computer), `label CAN TEXT` gives a can
+  another label, `delete CAN...` deletes cans (asks for `yes`).
 - Goal: after `open` on another computer, the desktop looks, is arranged
   and feels (mouse, keyboard) exactly the same, except for apps that are
   installed differently. Personal things and pure hardware (screens,
@@ -60,6 +61,7 @@ lib/list.sh           list, peek, reading cans and manifests
 lib/diff.sh           views, comparison, the diff report
 lib/seal.sh           seal, package_can
 lib/open.sh           open: confirm, autocan, apply, log, restart
+lib/manage.sh         label (swaps only the manifest), delete
 test/run-tests.sh     the test script (safe to run on this computer)
 config/example.conf   the documented example config (the only tracked one)
 README.md             the user guide
@@ -95,7 +97,13 @@ LICENSE               MIT
   `manifest.txt`, `catalog/{builtin,user}/*.item` (every item file known
   at seal time), `items/ITEM/{dconf.ini,home/,root/,wallpaper/,
   wallpaper.txt,language.txt,timezone.txt,software.txt,crontab.txt}`.
+  The label is one line of at most `LABEL_MAX` (40) characters, counted
+  as letters, not bytes (`clean_label`); a longer one from an older can
+  or a hand-edited manifest is cut where it is shown (`short_label`),
+  except in `peek`.
 - **Log** `backup_dir/cinnamon-can.log`: seal and open only, `key=value`.
+  `delete` leaves the log alone: its IDs keep `new_can_id` from reusing
+  them, and `list` says when the can applied last is gone.
 - Ownership: the longest matching path of ALL items (also switched-off
   ones) wins, user items win ties; catch-alls `other` and `app-settings`.
   `diff` and `open` always split both sides with the **can's** catalog
@@ -127,9 +135,10 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   start with `└` (`ROW`).
 - Ctrl+C always ends on a new line that says what it left behind
   (`on_ctrl_c`: "Cancelled; nothing was changed."). A command sets
-  `CC_CANCEL_NOTE` when stopping means more than that (`seal`), and
-  switches Ctrl+C off (`trap '' INT`) while it writes something that must
-  not be left half done (`open`).
+  `CC_CANCEL_NOTE` when stopping means more than that (`seal`, `delete`),
+  and switches Ctrl+C off (`trap '' INT`) while it writes something that
+  must not be left half done (`open`, and the last step of `label` and
+  `delete`).
 - A command for the user to type is a message line that starts with
   `$ `: it gets a grey `$` in the left column and can be copied as it is.
   Can IDs go through `show_id` (grey block, or `[ID]`), but never inside
@@ -150,7 +159,9 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   never touches the real backup folder or any setting: `open` is only
   exercised in the two cases where it stops by itself, with closed input
   and a fake `systemctl` first in PATH; its restart question is tried on
-  its own, with that fake. A few tests compare a can against
+  its own, with that fake. `delete` gets its answers through `script`
+  (which gives it a terminal) and only deletes the test's own cans. A
+  few tests compare a can against
   the LIVE computer and can fail when a setting changes mid-run — run the
   script again before hunting for a bug. New behaviour should come with a
   new check in this script.
@@ -171,6 +182,8 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   answer `yes` to `open` on the real machine** unless the owner asks for it;
   then seal a safety can first, put a `systemctl` shim in `PATH` so the
   machine does not restart under you, and end on the safety can.
+- Never run `label` or `delete` on the owner's cans: try them with a
+  config whose `backup_dir` is a folder of test cans.
 - `sudo` does not search `~/.local/bin`: messages and docs must show the
   full path of the program for `sudo ... open`.
 - Real writes are tested in a sandbox: `dbus-run-session` with a fake

@@ -34,16 +34,30 @@ manifest_complete() {
 
 # open_can PATH DIR -> unpacks a can into DIR and reads its manifest.
 open_can() {
-    local can="$1" dir="$2" file
-    file="${SUB}$(file_dot "$(to_tilde "$can")")"      # the can, on its own line
+    local can="$1" dir="$2"
     rm -rf "$dir"; mkdir -p "$dir"
-    tar -C "$dir" -xzf "$can" 2>/dev/null \
-        || die "The specified can cannot be unpacked; it is damaged or not a can:" "$file"
-    [ -f "$dir/manifest.txt" ] \
-        || die "The specified can has no manifest; it was not made by cinnamon-can:" "$file"
+    tar -C "$dir" -xzf "$can" 2>/dev/null || not_a_can "$can" damaged
+    [ -f "$dir/manifest.txt" ] || not_a_can "$can" no-manifest
     read_manifest "$dir/manifest.txt"
-    manifest_complete \
-        || die "The specified can has an incomplete manifest; it was not made by cinnamon-can:" "$file"
+    manifest_complete || not_a_can "$can" incomplete
+}
+
+# not_a_can PATH WHY -> stops with what is wrong with the can (WHY:
+#   damaged, no-manifest or incomplete), the can on its own line under it.
+not_a_can() {
+    local why
+    case "$2" in
+        damaged)     why="cannot be unpacked; it is damaged or not a can" ;;
+        no-manifest) why="has no manifest; it was not made by cinnamon-can" ;;
+        *)           why="has an incomplete manifest; it was not made by cinnamon-can" ;;
+    esac
+    die "The specified can $why:" "${SUB}$(file_dot "$(to_tilde "$1")")"
+}
+
+# label_or_none TEXT -> TEXT, or a grey "(none)" when there is no label,
+#   so it does not read like a label.
+label_or_none() {
+    if [ -n "$1" ]; then printf '%s' "$1"; else printf '%s(none)%s' "$C_GREY" "$C_RESET"; fi
 }
 
 # tree_items TREE -> the items stored in a tree, in catalog order.
@@ -62,9 +76,8 @@ tree_items() {
 #   (The Mint edition is left out: it is always Cinnamon, since
 #   cinnamon-can runs on nothing else.)
 can_header() {
-    local c="${MAN[can.created]}" label="${MAN[can.label]:-}" more=()
-    [ -n "$label" ] || label="${C_GREY}(none)${C_RESET}"
-    more+=("${SUB}Label: $label")
+    local c="${MAN[can.created]}" more=()
+    more+=("${SUB}Label: $(label_or_none "${MAN[can.label]:-}")")
     [ -z "${MAN[can.opened]:-}" ] \
         || more+=("${SUB}Kind:  autocan, saved just before opening can $(show_id "${MAN[can.opened]}")")
     more+=("${SUB}When:  ${c:0:10} ${c:11:8} ${c:19}"
@@ -162,33 +175,20 @@ cmd_list() {
 
 # list_report -> the whole list, as cmd_list shows it.
 list_report() {
-    local f size created kind line skipped=() start
+    local f line id skipped=() start more=()
     say ""
     if [ -z "$(all_cans)" ]; then
         info "Cans stored in $(to_tilde "$(backup_dir)"): none yet. Make one with:" "\$ cinnamon-can seal -L \"My first can\""
         return 0
     fi
     info "Cans stored in $(to_tilde "$(backup_dir)"):"
-    table_head 6 "ID" 7 "KIND" 16 "CREATED" 12 "HOST" 14 "MINT / CINN." -8 "SIZE" 0 "LABEL"
+    can_table_head
     # Newest first: the first row gets a grey "Latest:" in the left
     # column (where the badges are), so the order is clear at a glance.
     start=" ${C_GREY}Latest:${C_RESET} $SUB"
     while IFS= read -r f; do
-        tar -xzOf "$f" ./manifest.txt > "$CC_TMP/m.txt" 2>/dev/null \
-            || { skipped+=("${SUB}$(file_dot "$(basename "$f")")" "${SUB2}The file cannot be unpacked"); continue; }
-        read_manifest "$CC_TMP/m.txt"
-        manifest_complete \
-            || { skipped+=("${SUB}$(file_dot "$(basename "$f")")" "${SUB2}Its manifest is incomplete"); continue; }
-        size="$(human_size "$(stat -c %s "$f")")"
-        created="${MAN[can.created]:0:16}"
-        # "manual" in blue: a can you made yourself (blue like the dot of
-        # your own items); an autocan keeps the normal colour.
-        kind="$(printf '%-7s' "${MAN[can.kind]}")"
-        kind="${kind/#manual/${C_BLUE}manual${C_RESET}}"
-        printf '%s%s %s %-16s %-12s %-14s %8s %s\n' "$start" "$(show_id "${MAN[can.id]}")" \
-            "$kind" "${created/T/ }" "${MAN[can.hostname]}" \
-            "${MAN[can.mint_release]} / ${MAN[can.cinnamon_version]}" "$size" "${MAN[can.label]:-}"
-        start="$ROW"
+        if can_row "$start" "$f"; then start="$ROW"
+        else skipped+=("${SUB}$(file_dot "$(basename "$f")")" "${SUB2}$ROW_PROBLEM"); fi
     done < <(all_cans)
     # Files that are not readable cans are named after the table, not in it.
     # (On the normal output, so the warning stays in its place on the page.)
@@ -196,10 +196,37 @@ list_report() {
         || { say ""; msg_lines "$B_WARN" "Skipped can(s) that are not readable or malformed:" "${skipped[@]}"; }
     line="$(last_applied)"
     if [ -n "$line" ]; then
+        id="$(log_field "$line" can)"
+        more=("${SUB}${line:0:16}, system files $(log_field "$line" system)")
+        # The log remembers the can after it was deleted ("delete", or by hand).
+        find_can "$id" >/dev/null || more+=("${SUB}This can is no longer in $(to_tilde "$(backup_dir)")")
         say ""
-        info "Latest applied on this computer: can $(show_id "$(log_field "$line" can)")" \
-             "${SUB}${line:0:16}, system files $(log_field "$line" system)"
+        info "Latest applied on this computer: can $(show_id "$id")" "${more[@]}"
     fi
+}
+
+# can_table_head -> the heading row of a table of cans ("list", "delete").
+can_table_head() { table_head 6 "ID" 7 "KIND" 16 "CREATED" 12 "HOST" 14 "MINT / CINN." -8 "SIZE" 0 "LABEL"; }
+
+# can_row START FILE -> one row of that table for the can in FILE, after
+#   START (ROW, or the "Latest:" of "list"). When the can cannot be read,
+#   nothing is printed: it fails and ROW_PROBLEM says why.
+ROW_PROBLEM=""
+can_row() {
+    local f="$2" size created kind
+    tar -xzOf "$f" ./manifest.txt > "$CC_TMP/m.txt" 2>/dev/null \
+        || { ROW_PROBLEM="The file cannot be unpacked"; return 1; }
+    read_manifest "$CC_TMP/m.txt"
+    manifest_complete || { ROW_PROBLEM="Its manifest is incomplete"; return 1; }
+    size="$(human_size "$(stat -c %s "$f")")"
+    created="${MAN[can.created]:0:16}"
+    # "manual" in blue: a can you made yourself (blue like the dot of
+    # your own items); an autocan keeps the normal colour.
+    kind="$(printf '%-7s' "${MAN[can.kind]}")"
+    kind="${kind/#manual/${C_BLUE}manual${C_RESET}}"
+    printf '%s%s %s %-16s %-12s %-14s %8s %s\n' "$1" "$(show_id "${MAN[can.id]}")" \
+        "$kind" "${created/T/ }" "${MAN[can.hostname]}" \
+        "${MAN[can.mint_release]} / ${MAN[can.cinnamon_version]}" "$size" "$(short_label "${MAN[can.label]:-}")"
 }
 
 # log_field LINE NAME -> the value of NAME=... in a log line.

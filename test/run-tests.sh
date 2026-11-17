@@ -11,11 +11,15 @@
 # (so it can never wait for an answer) and with a fake "systemctl" first
 # in PATH (so nothing could ever restart the computer). The restart
 # question at the end of "open" is tried on its own, with that fake.
+# "script" gives the program a terminal where one is needed.
+# "delete" gets its answers that way, and only ever deletes cans the
+# tests made in their own folder.
 #
 # Covered: every script's syntax, the command line, the start-up errors
 # (also with a broken "cinnamon"), seal / list / peek / diff, cans with a
 # broken manifest, the diff columns and their order, which item owns
-# which setting and which file, what is excluded, ignored and never kept.
+# which setting and which file, what is excluded, ignored and never kept,
+# long labels and names, label, delete.
 #
 # NOT covered -- follow the Testing rules in AGENTS.md instead: really
 # applying a can ("open" + yes), sudo, language, system files, the real
@@ -447,6 +451,112 @@ check "... and none was, not even a part"     [ "$(ls "$TMP/cans" | wc -l)" -eq 
 run s out env PATH="$TMP/slow-dconf:$PATH" timeout --preserve-status -s INT 3 "$CC" -c "$CONF" diff "$BASEID"
 check "Ctrl+C during diff: exit 130"          [ "$s" -eq 130 ]
 check "... says that nothing was changed"     sh -c 'printf "%s\n" "$1" | grep -qxF "   INFO  Cancelled; nothing was changed."' sh "$out"
+
+
+section "long labels and names"
+# A label has at most 40 characters; a longer one (from an older can, or
+# a manifest changed by hand) is cut where it is shown, in a terminal.
+L40="$(printf 'ก%.0s' {1..40})"
+n_before="$(ls "$TMP/cans" | wc -l)"
+run s out "$CC" -c "$CONF" seal -L "${L40}x"
+check "seal with a label of 41 characters: exit 1"     [ "$s" -eq 1 ]
+check "... says how long it is, and the most"          has "$out" "  ERROR  The label is too long: 41 characters (at most 40)"
+check "... and no can is made"                         [ "$(ls "$TMP/cans" | wc -l)" -eq "$n_before" ]
+U="$TMP/unpack-long"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+sed -i 's/^label[[:space:]]*=.*/label = A label written by hand that is much longer than forty/' "$U/manifest.txt"
+pack "$U" WNG2 13
+run s out "$CC" -c "$CONF" list
+check "a long label is whole in a file"                has "$out" " A label written by hand that is much longer than forty"
+# What only shows in a terminal: "script" gives the program one.
+# in_terminal ANSWER COMMAND... -> runs cinnamon-can in a terminal, with
+#   ANSWER typed in; the output without colours. With COLS=N in front,
+#   the terminal is N columns wide.
+in_terminal() {
+    local cmd; cmd="$(printf '%q ' env PAGER=cat "$CC" "${@:2}")"
+    [ -z "${COLS:-}" ] || cmd="stty cols $COLS rows 24; $cmd"
+    printf '%s\n' "$1" | script -qec "$cmd" /dev/null | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\r'
+    return "${PIPESTATUS[1]}"
+}
+if command -v script >/dev/null 2>&1; then
+    out="$(in_terminal "" -c "$CONF" list)" || true
+    check "... and cut in a terminal"                  has "$out" " A label written by hand that is much lo…"
+    # A config file named by hand, too long for the line: cut at the front.
+    s=0; out="$(in_terminal "" -c "a-config-file-name-typed-by-hand-that-is-far-too-long-for-the-line" list)" || s=$?
+    check "a long config name is cut in a terminal"    sh -c 'printf "%s\n" "$1" | grep -qE "^  ERROR  Provided config file not found: ….{1,38}-line\.conf$"' sh "$out"
+    # On 40 columns the message alone nearly fills the line: 10 characters stay.
+    s=0; out="$(COLS=40 in_terminal "" -c "a-config-file-name-typed-by-hand-that-is-far-too-long-for-the-line" list)" || s=$?
+    check "... also on a very narrow screen"           sh -c 'printf "%s\n" "$1" | grep -qxF "  ERROR  Provided config file not found: …line.conf"' sh "$out"
+else
+    printf '  skip "script" is missing: what only shows in a terminal is not tried\n'
+fi
+
+
+section "label"
+# Cans of their own, so the cans of the other tests stay as they are.
+U="$TMP/unpack-manage"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+pack "$U" TAG2 10
+TAG="$TMP/cans/manual-TAG2-20300101T000010+0000.tar.gz.canned"
+# inside CAN -> every file in the can but the manifest, with its
+#   permissions, owner, size and time.
+inside() { tar -tvzf "$1" | grep -v ' \./manifest\.txt$' | sort; }
+before="$(inside "$TAG")"
+run s out "$CC" -c "$CONF" label TAG2 "ก่อนอัปเกรด new label"
+check "label: exit 0"                                  [ "$s" -eq 0 ]
+check "label shows the old label and the new one"      sh -c 'printf "%s" "$1" | grep -qF "         └ Was: test can" && printf "%s" "$1" | grep -qF "         └ Now: ก่อนอัปเกรด new label"' sh "$out"
+check "... the can keeps its file name"                [ -f "$TAG" ]
+check "... and everything else in it, exactly"         [ "$(inside "$TAG")" = "$before" ]
+run s out "$CC" -c "$CONF" peek TAG2
+check "peek shows the new label"                       has "$out" "         └ Label: ก่อนอัปเกรด new label"
+run s out "$CC" -c "$CONF" label tag2 "ก่อนอัปเกรด new label"
+check "the same label again: exit 0, nothing changed"  sh -c '[ "$1" -eq 0 ] && printf "%s" "$2" | grep -qF "already has this label; nothing was changed."' sh "$s" "$out"
+run s out "$CC" -c "$CONF" label TAG2 ""
+check "an empty label removes it"                      has "$out" "         └ Now: (none)"
+run s out "$CC" -c "$CONF" label TAG2 "$L40"
+check "a label of 40 Thai letters is taken"            [ "$s" -eq 0 ]
+run s out "$CC" -c "$CONF" label TAG2 "${L40}x"
+check "41 characters: exit 1"                          [ "$s" -eq 1 ]
+run s out "$CC" -c "$CONF" peek TAG2
+check "... and the can keeps its label"                has "$out" "         └ Label: $L40"
+run s out "$CC" -c "$CONF" label GRB2 "x"
+check "label of a damaged can: exit 1, says why"       sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "damaged"' sh "$s" "$out"
+run s out "$CC" -c "$CONF" label TAG2
+check "label without a text: exit 1, how to use it"    sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "Usage: cinnamon-can label CAN TEXT"' sh "$s" "$out"
+
+
+section "delete"
+pack "$U" DRP2 11; pack "$U" DRP3 12
+DRP2="$TMP/cans/manual-DRP2-20300101T000011+0000.tar.gz.canned"
+DRP3="$TMP/cans/manual-DRP3-20300101T000012+0000.tar.gz.canned"
+GRB="$(ls "$TMP/cans"/manual-GRB2-*.tar.gz.canned)"
+# A made-up "open" in the log, with DRP2 as its way back.
+printf '2030-01-01T00:00:00+0000  host=%s  user=x  cmd=open  can=TAG2  backup=DRP2  system=none  result=applied\n' \
+    "$(hostname 2>/dev/null || cat /etc/hostname)" >> "$TMP/cans/cinnamon-can.log"
+run s out "$CC" -c "$CONF" delete DRP2 drp3 "$DRP3"
+check "delete without a terminal: exit 1"              [ "$s" -eq 1 ]
+check "... deletes nothing"                            [ -f "$DRP2" -a -f "$DRP3" ]
+check "... says it must be confirmed"                  has "$out" "Command \"delete\" needs to be confirmed in a terminal"
+check "... after showing the cans, each one once"      sh -c 'printf "%s" "$1" | grep -qF "   INFO  Cans to be deleted:" && [ "$(printf "%s\n" "$1" | grep -c "└ \[DRP3\]")" -eq 1 ]' sh "$out"
+check "... and the way back from the latest open"      has "$out" "   WARN  The can [DRP2] is the way back from the latest open:"
+run s out "$CC" -c "$CONF" delete "$CONF"
+check "a file that is not a can is never deleted"      sh -c '[ "$1" -eq 1 ] && [ -f "$2" ] && printf "%s" "$3" | grep -qF "Only cans can be deleted"' sh "$s" "$CONF" "$out"
+run s out "$CC" -c "$CONF" delete
+check "delete without a can: exit 1, how to use it"    sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "Usage: cinnamon-can delete CAN"' sh "$s" "$out"
+# The answers, in a terminal (only cans in the test folder are deleted).
+if command -v script >/dev/null 2>&1; then
+    s=0; out="$(in_terminal no -c "$CONF" delete DRP2)" || s=$?
+    check "answer \"no\": exit 1, nothing deleted"     [ "$s" -eq 1 -a -f "$DRP2" ]
+    check "... says so"                                has "$out" "Cancelled; nothing was deleted."
+    s=0; out="$(in_terminal yes -c "$CONF" delete DRP2 DRP3 GRB2 TAG2)" || s=$?
+    check "answer \"yes\": exit 0"                     [ "$s" -eq 0 ]
+    check "... deletes them all, also a damaged one"   [ ! -e "$DRP2" -a ! -e "$DRP3" -a ! -e "$GRB" -a ! -e "$TAG" ]
+    check "... and says so"                            has "$out" "OK  The 4 cans are deleted."
+else
+    printf '  skip "script" is missing: the answers to "delete" are not tried\n'
+fi
+# "list" when the can applied last is gone (deleted above, or by hand).
+rm -f "$TAG"
+run s out "$CC" -c "$CONF" list
+check "list: the can applied last is no longer there"  sh -c 'printf "%s" "$1" | grep -qF "Latest applied on this computer: can [TAG2]" && printf "%s" "$1" | grep -qF "         └ This can is no longer in "' sh "$out"
 
 
 section "what a can must NOT hold (hardware and personal are off)"
