@@ -60,7 +60,7 @@ lib/refs.sh           finds what a can uses that is not installed here,
 lib/list.sh           list, peek, reading cans and manifests
 lib/diff.sh           views, comparison, the diff report
 lib/seal.sh           seal, package_can
-lib/open.sh           open: confirm, autocan, apply, log, restart
+lib/open.sh           open: summary, confirm, autocan, apply, log, restart
 lib/manage.sh         label (swaps only the manifest), delete
 test/run-tests.sh     the test script (safe to run on this computer)
 config/example.conf   the documented example config (the only tracked one)
@@ -148,8 +148,8 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   inside such a command.
 - Sentences start with a capital letter, labels the program writes too.
 - `warn` and `err` go to stderr; a warning that is part of a report
-  (`diff`, `seal`, `list`) uses `msg_lines "$B_WARN"` on stdout, so it
-  stays in its place on the page.
+  (`diff`, `seal`, `list`, the summary of `open`) uses
+  `msg_lines "$B_WARN"` on stdout, so it stays in its place on the page.
 
 ## Testing
 

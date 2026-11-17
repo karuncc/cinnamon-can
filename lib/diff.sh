@@ -267,7 +267,8 @@ resplit_takers() {
 # show_left_out FILE MINUS_ID PLUS_ID -> a warning for the files of the "-"
 #   can that no item of the "+" can takes (FILE: see resplit_tree), with
 #   the item each was in. They are not compared, so without this line
-#   "No differences" could be read as "the two cans hold the same".
+#   "No differences" could be read as "the two cans hold the same". The
+#   command it shows names the cans as CMP_PLUS_REF / CMP_MINUS_REF do.
 show_left_out() {
     [ -s "$1" ] || return 0
     local lines=() l
