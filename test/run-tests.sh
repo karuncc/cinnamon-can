@@ -11,11 +11,13 @@
 # (so it can never wait for an answer) and with a fake "systemctl" first
 # in PATH (so nothing could ever restart the computer). The restart
 # question at the end of "open" is tried on its own, with that fake.
+# "script" gives the program a terminal where one is needed.
 #
 # Covered: every script's syntax, the command line, the start-up errors
 # (also with a broken "cinnamon"), seal / list / peek / diff, cans with a
 # broken manifest, the diff columns and their order, which item owns
-# which setting and which file, what is excluded, ignored and never kept.
+# which setting and which file, what is excluded, ignored and never kept,
+# long labels and names.
 #
 # NOT covered -- follow the Testing rules in AGENTS.md instead: really
 # applying a can ("open" + yes), sudo, language, system files, the real
@@ -447,6 +449,39 @@ check "... and none was, not even a part"     [ "$(ls "$TMP/cans" | wc -l)" -eq 
 run s out env PATH="$TMP/slow-dconf:$PATH" timeout --preserve-status -s INT 3 "$CC" -c "$CONF" diff "$BASEID"
 check "Ctrl+C during diff: exit 130"          [ "$s" -eq 130 ]
 check "... says that nothing was changed"     sh -c 'printf "%s\n" "$1" | grep -qxF "   INFO  Cancelled; nothing was changed."' sh "$out"
+
+
+section "long labels and names"
+# A label has at most 40 characters; a longer one (from an older can, or
+# a manifest changed by hand) is cut where it is shown, in a terminal.
+L40="$(printf 'ก%.0s' {1..40})"
+n_before="$(ls "$TMP/cans" | wc -l)"
+run s out "$CC" -c "$CONF" seal -L "${L40}x"
+check "seal with a label of 41 characters: exit 1"     [ "$s" -eq 1 ]
+check "... says how long it is, and the most"          has "$out" "  ERROR  The label is too long: 41 characters (at most 40)"
+check "... and no can is made"                         [ "$(ls "$TMP/cans" | wc -l)" -eq "$n_before" ]
+U="$TMP/unpack-long"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+sed -i 's/^label[[:space:]]*=.*/label = A label written by hand that is much longer than forty/' "$U/manifest.txt"
+pack "$U" WNG2 13
+run s out "$CC" -c "$CONF" list
+check "a long label is whole in a file"                has "$out" " A label written by hand that is much longer than forty"
+# What only shows in a terminal: "script" gives the program one.
+# in_terminal ANSWER COMMAND... -> runs cinnamon-can in a terminal, with
+#   ANSWER typed in; the output without colours.
+in_terminal() {
+    local cmd; cmd="$(printf '%q ' env PAGER=cat "$CC" "${@:2}")"
+    printf '%s\n' "$1" | script -qec "$cmd" /dev/null | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\r'
+    return "${PIPESTATUS[1]}"
+}
+if command -v script >/dev/null 2>&1; then
+    out="$(in_terminal "" -c "$CONF" list)" || true
+    check "... and cut in a terminal"                  has "$out" " A label written by hand that is much lo…"
+    # A config file named by hand, too long for the line: cut at the front.
+    s=0; out="$(in_terminal "" -c "a-config-file-name-typed-by-hand-that-is-far-too-long-for-the-line" list)" || s=$?
+    check "a long config name is cut in a terminal"    sh -c 'printf "%s\n" "$1" | grep -qE "^  ERROR  Provided config file not found: ….{1,38}-line\.conf$"' sh "$out"
+else
+    printf '  skip "script" is missing: what only shows in a terminal is not tried\n'
+fi
 
 
 section "what a can must NOT hold (hardware and personal are off)"

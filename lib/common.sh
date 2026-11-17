@@ -167,6 +167,15 @@ fit_end() {
     else printf '%s' "$1"; fi
 }
 
+# fit_start TEXT ROOM -> the same, but the start stays and "…" goes at the
+#   end (for a label: its first words stay). Characters are counted as
+#   letters, not bytes, whatever language the computer is set to.
+fit_start() {
+    local LC_ALL=C.UTF-8
+    if [ -n "$C_RESET" ] && [ "${#1}" -gt "$2" ]; then printf '%s…' "${1:0:$(( $2 - 1 ))}"
+    else printf '%s' "$1"; fi
+}
+
 
 # ---------------------------------------------------------------------------
 # 2. Temporary folder
@@ -340,7 +349,7 @@ load_config() {
                 "\$ cd $(to_tilde "$CC_ROOT")" \
                 "\$ cp config/example.conf config/default.conf"
         fi
-        die "Provided config file not found: $(rel_path "$CONF_FILE")"
+        die "Provided config file not found: $(conf_name 41)"
     fi
     USER_ITEMS_DIR="$(cd "$(dirname "$CONF_FILE")" && pwd)/items"
 
@@ -378,8 +387,13 @@ load_config() {
 # config_problems LINE... -> stops with every problem of the config file,
 #   listed under its name (the same layout as for item files).
 config_problems() {
-    die "Invalid config file(s) detected:" "${SUB}$(file_dot "$(rel_path "$CONF_FILE")")" "$@"
+    die "Invalid config file(s) detected:" "${SUB}$(file_dot "$(conf_name 13)")" "$@"
 }
+
+# conf_name USED -> the config file's name as messages show it, cut at the
+#   front when it would not fit on the line (you name the file yourself,
+#   so it may be long); USED is how much of the line is taken before it.
+conf_name() { fit_end "$(rel_path "$CONF_FILE")" $(( $(screen_width) - $1 )); }
 
 # backup_dir -> the folder where cans live, with ~ expanded.
 backup_dir() { expand_home "$CONF_BACKUP_DIR"; }
@@ -494,6 +508,26 @@ resolve_can() {
     fi
     die "Can file not found: $what"
 }
+
+# A label is one short line of text you give a can (seal -L).
+LABEL_MAX=40
+
+# clean_label TEXT -> sets LABEL to TEXT as one line (tabs and line breaks
+#   become spaces), or stops when it is longer than LABEL_MAX characters.
+#   Characters, not bytes: a Thai letter counts as one, and so does a
+#   vowel or tone mark written above or below it.
+LABEL=""
+clean_label() {
+    local LC_ALL=C.UTF-8 text="${1//[$'\t\n\r']/ }"
+    [ "${#text}" -le "$LABEL_MAX" ] \
+        || die "The label is too long: ${#text} characters (at most $LABEL_MAX)"
+    LABEL="$text"
+}
+
+# short_label TEXT -> a label as tables and headings show it: at most
+#   LABEL_MAX characters, so an older can (or a manifest changed by hand)
+#   with a longer label cannot stretch the line. "peek" shows it whole.
+short_label() { fit_start "$1" "$LABEL_MAX"; }
 
 # log_add FIELDS... -> one line in the log: time, computer, user, fields.
 #   Example line:

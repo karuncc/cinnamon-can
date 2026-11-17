@@ -28,14 +28,15 @@ cmd_seal() {
         shift
     done
 
-    # A label is one line of text (tabs and line breaks become spaces).
-    label="${label//[$'\t\n\r']/ }"
+    # One short line of text (see clean_label), checked before any work.
+    clean_label "$label"
+    label="$LABEL"
 
     make_tmpdir
     local stage="$CC_TMP/stage"
     local -a on=()
     mapfile -t on < <(items_on)
-    [ "${#on[@]}" -gt 0 ] || die "Every item is switched off in $(rel_path "$CONF_FILE")"
+    [ "${#on[@]}" -gt 0 ] || die "Every item is switched off in $(conf_name 39)"
 
     # What Ctrl+C says (see on_ctrl_c): a half-made can is removed.
     CC_CANCEL_NOTE="Cancelled; no can was made."

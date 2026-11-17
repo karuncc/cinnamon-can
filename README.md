@@ -114,6 +114,9 @@ example an app that is pinned to the panel but no longer installed). A
 items (see "Your own items"); the grey `•` that starts a table's heading
 row is only the point its rows hang from.
 
+A label is one line of at most 40 characters (a Thai vowel or tone mark
+counts as one).
+
 ### Find a can
 
 ```
@@ -134,6 +137,8 @@ cinnamon-can list
 made by `open` just before it changes anything — it is your undo. The
 newest can comes first, marked `Latest:`. IDs can be typed in lower case.
 Wherever a command takes a CAN you may also give the path of a can file.
+A label longer than 40 characters (from a can made before this limit) is
+shown cut with `…`; the can keeps it whole, and `peek` shows all of it.
 
 ### Look inside a can
 

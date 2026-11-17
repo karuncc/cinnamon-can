@@ -187,7 +187,7 @@ list_report() {
         kind="${kind/#manual/${C_BLUE}manual${C_RESET}}"
         printf '%s%s %s %-16s %-12s %-14s %8s %s\n' "$start" "$(show_id "${MAN[can.id]}")" \
             "$kind" "${created/T/ }" "${MAN[can.hostname]}" \
-            "${MAN[can.mint_release]} / ${MAN[can.cinnamon_version]}" "$size" "${MAN[can.label]:-}"
+            "${MAN[can.mint_release]} / ${MAN[can.cinnamon_version]}" "$size" "$(short_label "${MAN[can.label]:-}")"
         start="$ROW"
     done < <(all_cans)
     # Files that are not readable cans are named after the table, not in it.

@@ -37,7 +37,8 @@ Usage:
 
 Commands:
   seal [-L TEXT]    Put the current settings into a new can
-                    (-L, --label: a short description stored with it)
+                    (-L, --label: a short description stored with
+                    it, at most 40 characters)
   list              Show all cans
   peek CAN          Show what is inside a can
   diff CAN [CAN2]   Show what differs between a can and this

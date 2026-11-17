@@ -95,6 +95,10 @@ LICENSE               MIT
   `manifest.txt`, `catalog/{builtin,user}/*.item` (every item file known
   at seal time), `items/ITEM/{dconf.ini,home/,root/,wallpaper/,
   wallpaper.txt,language.txt,timezone.txt,software.txt,crontab.txt}`.
+  The label is one line of at most `LABEL_MAX` (40) characters, counted
+  as letters, not bytes (`clean_label`); a longer one from an older can
+  or a hand-edited manifest is cut where it is shown (`short_label`),
+  except in `peek`.
 - **Log** `backup_dir/cinnamon-can.log`: seal and open only, `key=value`.
 - Ownership: the longest matching path of ALL items (also switched-off
   ones) wins, user items win ties; catch-alls `other` and `app-settings`.

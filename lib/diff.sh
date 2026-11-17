@@ -86,7 +86,7 @@ build_comparison() {
     open_can "$plus_can" "$CC_TMP/can-plus"
     CMP_PLUS_ID="${MAN[can.id]}"
     local plus_home="${MAN[can.home]}" plus_label
-    plus_label="Can $(show_id "${MAN[can.id]}")${MAN[can.label]:+ (Label: ${MAN[can.label]})}"
+    plus_label="Can $(show_id "${MAN[can.id]}")${MAN[can.label]:+ (Label: $(short_label "${MAN[can.label]}"))}"
     notes="$(version_notes)"
     # Kept for a second can, whose manifest replaces MAN below.
     local p_id="${MAN[can.id]}" p_rel="${MAN[can.mint_release]:-?}" p_ed="${MAN[can.mint_edition]:-?}"
@@ -111,7 +111,7 @@ build_comparison() {
         open_can "$minus_can" "$CC_TMP/can-minus"
         local minus_home="${MAN[can.home]}"
         m_id="${MAN[can.id]}"
-        minus_label="Can $(show_id "$m_id")${MAN[can.label]:+ (Label: ${MAN[can.label]})}"
+        minus_label="Can $(show_id "$m_id")${MAN[can.label]:+ (Label: $(short_label "${MAN[can.label]}"))}"
         notes="$(versions_between "$p_id" "$p_rel" "$p_ed" "$p_cin" "$p_arch")"
         notes_title="The two cans were made on different versions:"
         resplit_tree "$CC_TMP/can-minus" "$CC_TMP/can-minus-split" "$CC_TMP/can-plus"
