@@ -8,7 +8,7 @@ cinnamon-can seal -L "Before upgrade"   # put the current desktop in a new can
 cinnamon-can list                       # all cans, with their IDs
 cinnamon-can peek K7Q2                  # what is inside can K7Q2
 cinnamon-can diff K7Q2                  # what would change
-cinnamon-can open K7Q2                  # make this computer match, then restart
+cinnamon-can open K7Q2                  # make this computer match it
 ```
 
 It is plain `bash` and `awk` and uses only tools that come with Mint.
@@ -261,9 +261,11 @@ cinnamon-can open K7Q2
    `~/.local/share/backgrounds/cinnamon-can/`. Each step shows `[DONE]`,
    or `[FAIL]` with the reason under it. Ctrl+C is off while this runs (a
    few seconds), so the computer is never left half done.
-5. Prints how to undo (under an `UNDO` badge), writes the log, and
-   **restarts the computer** after a 10-second countdown (Ctrl+C cancels
-   only the restart).
+5. Prints how to undo (under an `UNDO` badge), writes the log, and asks
+   whether to **restart the computer** now: the desktop shows some
+   changes only after a restart. Type `yes` to restart; anything else, or
+   Ctrl+C, leaves it to you (logging out and in is enough for most
+   changes).
 
 ```
    INFO  Applying changes from the can [K7Q2] to this computer ...
@@ -277,7 +279,11 @@ cinnamon-can open K7Q2
    UNDO  To go back to how this computer was, run:
        $ cinnamon-can open R4T8
 
-   INFO  Restarting in 10 second(s) (Ctrl+C to cancel)
+   INFO  The desktop shows some changes only after a restart.
+         Type "yes" to restart now: no
+   WARN  Not restarted.
+         Please restart (or log out and in) yourself soon. To restart, run:
+       $ systemctl reboot
 ```
 
 **System files** (login screen, system language and keyboard, time zone)
@@ -406,7 +412,7 @@ built-in file is a good start).
    `cinnamon-can diff ID` and install what it lists as not installed (apps,
    fonts, themes) — their settings then apply right away.
 4. `cinnamon-can open ID` — with sudo and the full path (see "Open a can")
-   to include the system files. The computer restarts.
+   to include the system files. Type `yes` when it asks to restart.
 5. Things cinnamon-can does not handle: printers, Wi-Fi and VPN
    connections (with their passwords), Bluetooth pairing, online accounts,
    browser data, SSH/GPG keys, user groups, firewall, drivers. A Web
@@ -439,7 +445,9 @@ cinnamon-can -h | --help | help    the list of commands
 Exit codes: `0` when all went well (for `diff`: no differences), `1` when
 something failed, `diff` found differences, or you did not confirm `open`;
 `2` for an unknown command; `130` when you stopped it with Ctrl+C (it
-says what that left behind).
+says what that left behind). The restart question at the end of `open`
+does not change its code, whatever you answer: Ctrl+C there counts as
+"no".
 
 ## Inside a can
 

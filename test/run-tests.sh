@@ -9,7 +9,8 @@
 # touched. "open" is only run in the two cases where it stops by itself
 # (nothing differs / only system files differ), always with closed input
 # (so it can never wait for an answer) and with a fake "systemctl" first
-# in PATH (so nothing could ever restart the computer).
+# in PATH (so nothing could ever restart the computer). The restart
+# question at the end of "open" is tried on its own, with that fake.
 #
 # Covered: every script's syntax, the command line, the start-up errors
 # (also with a broken "cinnamon"), seal / list / peek / diff, cans with a
@@ -17,7 +18,8 @@
 # which setting and which file, what is excluded, ignored and never kept.
 #
 # NOT covered -- follow the Testing rules in AGENTS.md instead: really
-# applying a can ("open" + yes), sudo, language, system files, restart.
+# applying a can ("open" + yes), sudo, language, system files, the real
+# restart.
 #
 # The tests under "against the live computer" compare a can with this
 # computer RIGHT NOW; they can fail when a setting changes on this
@@ -581,6 +583,42 @@ for p in command-history history-search-for recent-connections; do
     check "private, never kept: $p" hasnt "$kept" "/$p$TAB"
 done
 check "fcitx's last input method is ignored" has "${ITEM_IGNORE[keyboard]}" "~/.config/fcitx/profile:IMName="
+
+
+section "the restart question at the end of open"
+# Only the question, with made-up answers: "yes" must call systemctl (the
+# fake one; it prints that it was called), anything else must not. The
+# number given to ask_restart is what "open" ends with (1: some changes
+# could not be made); no answer may change it.
+source "$ROOT/lib/open.sh"
+for a in no YES ""; do
+    s=0; out="$(printf '%s\n' "$a" | ask_restart 0 2>&1)" || s=$?
+    check "answer \"$a\": no restart"                hasnt "$out" "systemctl reboot (ignored"
+    check "... says so, with the command to restart"  sh -c 'printf "%s" "$1" | grep -qF "   WARN  Not restarted." && printf "%s" "$1" | grep -qF "       \$ systemctl reboot"' sh "$out"
+    check "... exit 0"                               [ "$s" -eq 0 ]
+done
+s=0; out="$(printf 'no\n' | ask_restart 1 2>&1)" || s=$?
+check "answer \"no\" after a failed change: exit 1"  [ "$s" -eq 1 ]
+s=0; out="$(ask_restart 0 </dev/null 2>&1)" || s=$?
+check "no answer at all (end of input): no restart"  hasnt "$out" "systemctl reboot (ignored"
+check "... exit 0"                                   [ "$s" -eq 0 ]
+check "the question says why to restart"             has "$out" "   INFO  The desktop shows some changes only after a restart."
+# Ctrl+C while it waits for the answer ("timeout" sends it, as in the
+# Ctrl+C section): a "no", not a stop, so exit 0 and not 130.
+s=0; out="$(sleep 3 | timeout --preserve-status -s INT 1 bash -c 'CC_ROOT="$1"; source "$1/lib/common.sh"; source "$1/lib/items.sh"; source "$1/lib/open.sh"; ask_restart 0' sh "$ROOT" 2>&1)" || s=$?
+check "Ctrl+C at the question: no restart, exit 0"   [ "$s" -eq 0 ]
+check "... says so, on a new line"                   has "$out" "$(printf '\n\n   WARN  Not restarted.')"
+# Only with the fake systemctl first in PATH: the real one WOULD restart.
+if [ "$(command -v systemctl)" = "$TMP/safe/systemctl" ]; then
+    s=0; out="$(printf 'yes\n' | ask_restart 0 2>&1)" || s=$?
+    check "answer \"yes\": restarts"                 has "$out" "systemctl reboot (ignored by the tests)"
+    check "... and says so"                          has "$out" "   INFO  Restarting ..."
+    check "... exit 0"                               [ "$s" -eq 0 ]
+    s=0; out="$(printf 'yes\n' | ask_restart 1 2>&1)" || s=$?
+    check "answer \"yes\" after a failed change: exit 1" [ "$s" -eq 1 ]
+else
+    fail "answer \"yes\": not tried, the fake systemctl is not first in PATH"
+fi
 
 
 printf '\n%d test(s), %d failed\n' "$TESTS" "$FAILS"

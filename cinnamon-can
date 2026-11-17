@@ -7,7 +7,7 @@
 #   peek   show what is inside one can
 #   diff   show what differs: a can and this computer, or two cans
 #   open   make this computer match a can (after showing the diff and
-#          asking you), then restart
+#          asking you), then offer to restart
 #
 # This file only reads the command line and hands over to lib/.
 
@@ -43,9 +43,9 @@ Commands:
   diff CAN [CAN2]   Show what differs between a can and this
                     computer, or between two cans
   open CAN          Show the differences, ask, then make this
-                    computer match the can and restart. Run it with
-                    sudo and the full path of this program to also
-                    restore system files.
+                    computer match the can and offer to restart.
+                    Run it with sudo and the full path of this
+                    program to also restore system files.
 
   CAN is a can's ID (as shown by "list") or the path to a can file.
 
