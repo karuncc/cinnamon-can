@@ -393,7 +393,12 @@ config_problems() {
 # conf_name USED -> the config file's name as messages show it, cut at the
 #   front when it would not fit on the line (you name the file yourself,
 #   so it may be long); USED is how much of the line is taken before it.
-conf_name() { fit_end "$(rel_path "$CONF_FILE")" $(( $(screen_width) - $1 )); }
+#   At least 10 characters of it stay, even on a very narrow screen.
+conf_name() {
+    local room=$(( $(screen_width) - $1 ))
+    [ "$room" -ge 10 ] || room=10
+    fit_end "$(rel_path "$CONF_FILE")" "$room"
+}
 
 # backup_dir -> the folder where cans live, with ~ expanded.
 backup_dir() { expand_home "$CONF_BACKUP_DIR"; }

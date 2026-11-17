@@ -469,9 +469,11 @@ run s out "$CC" -c "$CONF" list
 check "a long label is whole in a file"                has "$out" " A label written by hand that is much longer than forty"
 # What only shows in a terminal: "script" gives the program one.
 # in_terminal ANSWER COMMAND... -> runs cinnamon-can in a terminal, with
-#   ANSWER typed in; the output without colours.
+#   ANSWER typed in; the output without colours. With COLS=N in front,
+#   the terminal is N columns wide.
 in_terminal() {
     local cmd; cmd="$(printf '%q ' env PAGER=cat "$CC" "${@:2}")"
+    [ -z "${COLS:-}" ] || cmd="stty cols $COLS rows 24; $cmd"
     printf '%s\n' "$1" | script -qec "$cmd" /dev/null | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\r'
     return "${PIPESTATUS[1]}"
 }
@@ -481,6 +483,9 @@ if command -v script >/dev/null 2>&1; then
     # A config file named by hand, too long for the line: cut at the front.
     s=0; out="$(in_terminal "" -c "a-config-file-name-typed-by-hand-that-is-far-too-long-for-the-line" list)" || s=$?
     check "a long config name is cut in a terminal"    sh -c 'printf "%s\n" "$1" | grep -qE "^  ERROR  Provided config file not found: ….{1,38}-line\.conf$"' sh "$out"
+    # On 40 columns the message alone nearly fills the line: 10 characters stay.
+    s=0; out="$(COLS=40 in_terminal "" -c "a-config-file-name-typed-by-hand-that-is-far-too-long-for-the-line" list)" || s=$?
+    check "... also on a very narrow screen"           sh -c 'printf "%s\n" "$1" | grep -qxF "  ERROR  Provided config file not found: …line.conf"' sh "$out"
 else
     printf '  skip "script" is missing: what only shows in a terminal is not tried\n'
 fi
