@@ -9,6 +9,7 @@
 #   open   make this computer match a can (after showing the diff and
 #          asking you), then offer to restart
 #   label  give a can another label
+#   delete delete cans (after asking you)
 #
 # This file only reads the command line and hands over to lib/.
 
@@ -49,6 +50,7 @@ Commands:
                     Run it with sudo and the full path of this
                     program to also restore system files.
   label CAN TEXT    Give a can another label ("" removes it)
+  delete CAN...     Delete one or more cans, after asking
 
   CAN is a can's ID (as shown by "list") or the path to a can file.
 
@@ -79,7 +81,7 @@ main() {
     done
 
     case "$command" in
-        seal|list|peek|diff|open|label) ;;
+        seal|list|peek|diff|open|label|delete) ;;
         "") usage; exit 0 ;;
         *)  err "Unknown command \"$command\"" "Run \"cinnamon-can help\" for the commands."; exit 2 ;;
     esac
@@ -107,12 +109,12 @@ main() {
     load_items "$CC_ROOT/items" "$USER_ITEMS_DIR"
     check_config_items
 
-    # "list" and "peek" share lib/list.sh, "label" is in lib/manage.sh;
-    # every other command has its own file.
+    # "list" and "peek" share lib/list.sh, "label" and "delete" share
+    # lib/manage.sh; every other command has its own file.
     local module="$command"
     case "$command" in
         peek)         module="list" ;;
-        label)        module="manage" ;;
+        label|delete) module="manage" ;;
     esac
     # shellcheck source=/dev/null
     source "$CC_ROOT/lib/$module.sh"

@@ -10,6 +10,7 @@ cinnamon-can peek K7Q2                  # what is inside can K7Q2
 cinnamon-can diff K7Q2                  # what would change
 cinnamon-can open K7Q2                  # make this computer match it
 cinnamon-can label K7Q2 "Old desktop"   # give it another label
+cinnamon-can delete K7Q2                # delete it
 ```
 
 It is plain `bash` and `awk` and uses only tools that come with Mint.
@@ -116,8 +117,8 @@ items (see "Your own items"); the grey `•` that starts a table's heading
 row is only the point its rows hang from.
 
 A label is one line of at most 40 characters (a Thai vowel or tone mark
-counts as one); you can change it later with `label` (see "Change a
-label").
+counts as one); you can change it later with `label` (see "Change a label
+or delete a can").
 
 ### Find a can
 
@@ -141,6 +142,8 @@ newest can comes first, marked `Latest:`. IDs can be typed in lower case.
 Wherever a command takes a CAN you may also give the path of a can file.
 A label longer than 40 characters (from a can made before this limit) is
 shown cut with `…`; the can keeps it whole, and `peek` shows all of it.
+If the can applied last has been deleted since, a line under "Latest
+applied" says so.
 
 ### Look inside a can
 
@@ -309,15 +312,38 @@ System files are never deleted.
 **Undo:** `cinnamon-can open <the autocan's ID>` — shown at the end of every
 `open`, and found in `list` / the log.
 
-### Change a label
+### Change a label or delete a can
 
 ```
 cinnamon-can label K7Q2 "Before upgrade to 22.3"
 cinnamon-can label K7Q2 ""          # no label
+cinnamon-can delete R4T8            # or several at once: delete R4T8 M3XW
 ```
 
 `label` changes only the label inside the can: its ID, its file name and
 everything else in it stay as they are. It works on autocans too.
+
+`delete` shows the cans in the same table as `list` and asks you to type
+`yes`; anything else, or Ctrl+C, deletes nothing. The files are deleted
+for good (they do not go to the Trash). You may also delete a can file
+yourself, for example in the file manager, which moves it to the Trash.
+
+```
+   INFO  Cans to be deleted:
+         • ID     KIND    CREATED          HOST         MINT / CINN.       SIZE LABEL
+         └ [R4T8] autocan 2026-11-13 15:05 mylaptop     22.3 / 6.6.9   402.1 KB Before opening K7Q2
+
+   WARN  The can [R4T8] is the way back from the latest open:
+         └ It holds this computer's settings from before the can [K7Q2] was opened.
+
+         Type "yes" to delete this can for good: yes
+     OK  The can [R4T8] is deleted.
+```
+
+The warning shows only for the autocan of the latest `open` on this
+computer: without it, that `open` cannot be undone. A can that cannot be
+read (shown under "Skipped" in `list`) can be deleted too. The log keeps
+its lines, so a deleted can's ID is never given to a new can.
 
 ---
 
@@ -460,7 +486,8 @@ cinnamon-can -h | --help | help    the list of commands
 ```
 
 Exit codes: `0` when all went well (for `diff`: no differences), `1` when
-something failed, `diff` found differences, or you did not confirm `open`;
+something failed, `diff` found differences, or you did not confirm `open`
+or `delete`;
 `2` for an unknown command; `130` when you stopped it with Ctrl+C (it
 says what that left behind). The restart question at the end of `open`
 does not change its code, whatever you answer: Ctrl+C there counts as
@@ -481,7 +508,7 @@ A can is a `.tar.gz` file with this inside:
 | `items/ITEM/*.txt` | wallpaper name, language, time zone, software list, crontab |
 
 The log, `~/cinnamon-cans/cinnamon-can.log`, records every `seal` and `open`
-(`label` leaves it as it is).
+(`label` and `delete` leave it as it is).
 
 ## Contributing
 

@@ -12,12 +12,14 @@
 # in PATH (so nothing could ever restart the computer). The restart
 # question at the end of "open" is tried on its own, with that fake.
 # "script" gives the program a terminal where one is needed.
+# "delete" gets its answers that way, and only ever deletes cans the
+# tests made in their own folder.
 #
 # Covered: every script's syntax, the command line, the start-up errors
 # (also with a broken "cinnamon"), seal / list / peek / diff, cans with a
 # broken manifest, the diff columns and their order, which item owns
 # which setting and which file, what is excluded, ignored and never kept,
-# long labels and names, label.
+# long labels and names, label, delete.
 #
 # NOT covered -- follow the Testing rules in AGENTS.md instead: really
 # applying a can ("open" + yes), sudo, language, system files, the real
@@ -514,6 +516,42 @@ run s out "$CC" -c "$CONF" label GRB2 "x"
 check "label of a damaged can: exit 1, says why"       sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "damaged"' sh "$s" "$out"
 run s out "$CC" -c "$CONF" label TAG2
 check "label without a text: exit 1, how to use it"    sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "Usage: cinnamon-can label CAN TEXT"' sh "$s" "$out"
+
+
+section "delete"
+pack "$U" DRP2 11; pack "$U" DRP3 12
+DRP2="$TMP/cans/manual-DRP2-20300101T000011+0000.tar.gz.canned"
+DRP3="$TMP/cans/manual-DRP3-20300101T000012+0000.tar.gz.canned"
+GRB="$(ls "$TMP/cans"/manual-GRB2-*.tar.gz.canned)"
+# A made-up "open" in the log, with DRP2 as its way back.
+printf '2030-01-01T00:00:00+0000  host=%s  user=x  cmd=open  can=TAG2  backup=DRP2  system=none  result=applied\n' \
+    "$(hostname 2>/dev/null || cat /etc/hostname)" >> "$TMP/cans/cinnamon-can.log"
+run s out "$CC" -c "$CONF" delete DRP2 drp3 "$DRP3"
+check "delete without a terminal: exit 1"              [ "$s" -eq 1 ]
+check "... deletes nothing"                            [ -f "$DRP2" -a -f "$DRP3" ]
+check "... says it must be confirmed"                  has "$out" "Command \"delete\" needs to be confirmed in a terminal"
+check "... after showing the cans, each one once"      sh -c 'printf "%s" "$1" | grep -qF "   INFO  Cans to be deleted:" && [ "$(printf "%s\n" "$1" | grep -c "└ \[DRP3\]")" -eq 1 ]' sh "$out"
+check "... and the way back from the latest open"      has "$out" "   WARN  The can [DRP2] is the way back from the latest open:"
+run s out "$CC" -c "$CONF" delete "$CONF"
+check "a file that is not a can is never deleted"      sh -c '[ "$1" -eq 1 ] && [ -f "$2" ] && printf "%s" "$3" | grep -qF "Only cans can be deleted"' sh "$s" "$CONF" "$out"
+run s out "$CC" -c "$CONF" delete
+check "delete without a can: exit 1, how to use it"    sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "Usage: cinnamon-can delete CAN"' sh "$s" "$out"
+# The answers, in a terminal (only cans in the test folder are deleted).
+if command -v script >/dev/null 2>&1; then
+    s=0; out="$(in_terminal no -c "$CONF" delete DRP2)" || s=$?
+    check "answer \"no\": exit 1, nothing deleted"     [ "$s" -eq 1 -a -f "$DRP2" ]
+    check "... says so"                                has "$out" "Cancelled; nothing was deleted."
+    s=0; out="$(in_terminal yes -c "$CONF" delete DRP2 DRP3 GRB2 TAG2)" || s=$?
+    check "answer \"yes\": exit 0"                     [ "$s" -eq 0 ]
+    check "... deletes them all, also a damaged one"   [ ! -e "$DRP2" -a ! -e "$DRP3" -a ! -e "$GRB" -a ! -e "$TAG" ]
+    check "... and says so"                            has "$out" "OK  The 4 cans are deleted."
+else
+    printf '  skip "script" is missing: the answers to "delete" are not tried\n'
+fi
+# "list" when the can applied last is gone (deleted above, or by hand).
+rm -f "$TAG"
+run s out "$CC" -c "$CONF" list
+check "list: the can applied last is no longer there"  sh -c 'printf "%s" "$1" | grep -qF "Latest applied on this computer: can [TAG2]" && printf "%s" "$1" | grep -qF "         └ This can is no longer in "' sh "$out"
 
 
 section "what a can must NOT hold (hardware and personal are off)"

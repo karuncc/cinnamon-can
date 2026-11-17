@@ -491,6 +491,16 @@ new_can_id() {
     printf '%s\n' "$id"
 }
 
+# find_can ID -> full path of the can with that ID in the backup folder;
+#   nothing (and a failure) when there is none.
+find_can() {
+    local f
+    for f in "$(backup_dir)"/*-"$1"-*.tar.gz.canned; do
+        [ -f "$f" ] && { printf '%s\n' "$f"; return 0; }
+    done
+    return 1
+}
+
 # resolve_can WHAT -> full path of a can, given its ID (any case) or a path.
 resolve_can() {
     local what="$1" id f
@@ -501,9 +511,7 @@ resolve_can() {
     fi
     id="$(printf '%s' "$what" | tr '[:lower:]' '[:upper:]')"
     if [[ "$id" =~ ^[A-Z0-9]{4}$ ]]; then
-        for f in "$(backup_dir)"/*-"$id"-*.tar.gz.canned; do
-            [ -f "$f" ] && { printf '%s\n' "$f"; return 0; }
-        done
+        if f="$(find_can "$id")"; then printf '%s\n' "$f"; return 0; fi
         die "There is no can with ID $(show_id "$id") in $(to_tilde "$(backup_dir)") (see: cinnamon-can list)"
     fi
     die "Can file not found: $what"
