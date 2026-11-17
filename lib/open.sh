@@ -32,7 +32,8 @@ cmd_open() {
 
     build_comparison "$1"
     can_id="$CMP_PLUS_ID"
-    show_paged "$CMP_REPORT"
+    diff_report > "$CC_TMP/report.txt"
+    show_paged "$CC_TMP/report.txt"
 
     if [ "$CMP_TOTAL" -eq 0 ]; then
         say ""; ok "This computer's settings already match the can $(show_id "$can_id")"
