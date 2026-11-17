@@ -248,8 +248,8 @@ How to read it:
 - The dots of the summary: green when nothing differs, yellow when
   something does (system changes too), red for what is missing here.
 
-`diff`, `open` and `list` show long output page by page with `less`; set
-`PAGER` to use another program.
+`diff` shows long output page by page with `less`; set `PAGER` to use
+another program.
 
 ### Open a can
 
@@ -257,15 +257,50 @@ How to read it:
 cinnamon-can open K7Q2
 ```
 
-1. Shows the same comparison as `diff`, with a warning on top if the can
-   comes from another Mint or Cinnamon version.
+```
+   INFO  Reading this computer's settings ...
+
+   INFO  Opening the can [K7Q2] ...
+         └ Label: Before upgrade
+         └ When:  2026-11-13 14:30:00 +07:00
+         └ On:    mylaptop (Linux Mint 22.3, Cinnamon 6.6.9, x86_64)
+
+   INFO  Opening it changes on this computer:
+         └ ● 3 setting(s)
+         └ ● 2 file(s)
+         └ ● 1 system change(s) (only with sudo)
+
+   WARN  Software, themes and fonts the can uses, not installed here:
+         • TYPE      NAME                                 USED BY ITEM
+         └ apt       code                                 software
+         └ apt       gimp                                 software
+
+         To install the missing software, check the list above, then run:
+       $ sudo apt install code gimp
+
+         To see every change first, run:
+       $ cinnamon-can diff K7Q2
+
+   WARN  1 system change(s) will NOT be made without sudo.
+         To include them, stop here and run:
+       $ sudo ~/repos/cinnamon-can/cinnamon-can open K7Q2
+
+         Type "yes" to apply these changes:
+```
+
+1. Shows which can, and a summary of what opening it changes: how many
+   settings, files and system changes, and what the can uses that is not
+   installed here. Files it would delete (home files the can does not
+   have) are named under a warning of their own, since they may be your
+   own work. A warning on top says so if the can comes from another Mint
+   or Cinnamon version. To see every change itself, run `diff` first.
 2. Asks you to type `yes`. Anything else, or Ctrl+C, changes nothing.
 3. Saves the current state as an `autocan` (your undo).
 4. Makes this computer match the can: files first, then settings and your
    language. If fcitx is running, it is asked to reload, so it does not
    write its old settings back (ibus keeps its settings among the others
-   and needs nothing more). Files the can does not have are removed (they
-   were shown as `[DEL]`). The old home folder
+   and needs nothing more). Files the can does not have are removed (the
+   summary names them; `diff` shows them as `[DEL]`). The old home folder
    (`/home/olduser/...`) is replaced by yours everywhere. A wallpaper image
    this computer does not have is copied to
    `~/.local/share/backgrounds/cinnamon-can/`. Each step shows `[DONE]`,

@@ -6,7 +6,7 @@
 #   list   show all cans
 #   peek   show what is inside one can
 #   diff   show what differs: a can and this computer, or two cans
-#   open   make this computer match a can (after showing the diff and
+#   open   make this computer match a can (after showing a summary and
 #          asking you), then offer to restart
 #   label  give a can another label
 #   delete delete cans (after asking you)
@@ -45,10 +45,10 @@ Commands:
   peek CAN          Show what is inside a can
   diff CAN [CAN2]   Show what differs between a can and this
                     computer, or between two cans
-  open CAN          Show the differences, ask, then make this
-                    computer match the can and offer to restart.
-                    Run it with sudo and the full path of this
-                    program to also restore system files.
+  open CAN          Show a summary of the changes, ask, then
+                    make this computer match the can and offer to
+                    restart. Run it with sudo and the full path of
+                    this program to also restore system files.
   label CAN TEXT    Give a can another label ("" removes it)
   delete CAN...     Delete one or more cans, after asking
 
@@ -105,6 +105,7 @@ main() {
 
     load_system_facts
     startup_checks
+    CC_CONFIG_ARG="$config_name"    # for the commands the program shows to copy
     load_config "$config_name"
     load_items "$CC_ROOT/items" "$USER_ITEMS_DIR"
     check_config_items

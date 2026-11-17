@@ -33,13 +33,16 @@ cmd_diff() {
     [ $# -ge 1 ] && [ $# -le 2 ] || die "Usage: cinnamon-can diff CAN [CAN2]"
     make_tmpdir
     build_comparison "$@"
-    show_paged "$CMP_REPORT"
+    diff_report > "$CC_TMP/report.txt"
+    show_paged "$CC_TMP/report.txt"
     [ "$CMP_TOTAL" -eq 0 ]
 }
 
 # Results of build_comparison, used by "diff" and "open":
-CMP_MINUS="" CMP_PLUS="" CMP_RESULT="" CMP_REPORT="" CMP_TOTAL=0 CMP_SYSTEM=0
-CMP_PLUS_ID=""
+CMP_MINUS="" CMP_PLUS="" CMP_RESULT="" CMP_REFS="" CMP_TOTAL=0 CMP_SYSTEM=0
+CMP_PLUS_ID="" CMP_MINUS_ID=""   # the minus ID only when two cans are compared
+CMP_MINUS_LABEL="" CMP_PLUS_LABEL="" CMP_NOTES="" CMP_NOTES_TITLE=""
+CMP_PLUS_REF="" CMP_MINUS_REF=""   # how a command to copy names each can (can_ref)
 CMP_ITEMS=()
 
 # version_notes -> what differs between the opened can (MAN) and this
@@ -80,11 +83,12 @@ build_comparison() {
     [ $# -eq 1 ] || { minus_can="$(resolve_can "$1")" || exit 1; }
 
     CMP_MINUS="$CC_TMP/minus" CMP_PLUS="$CC_TMP/plus"
-    CMP_RESULT="$CC_TMP/result.txt" CMP_REPORT="$CC_TMP/report.txt"
+    CMP_RESULT="$CC_TMP/result.txt" CMP_REFS="$CC_TMP/refs.txt"
 
     # The "+" side is always a can; its own catalog decides what is what.
     open_can "$plus_can" "$CC_TMP/can-plus"
     CMP_PLUS_ID="${MAN[can.id]}"
+    CMP_PLUS_REF="$(can_ref "$plus_can" "$CMP_PLUS_ID")"
     local plus_home="${MAN[can.home]}" plus_label
     plus_label="Can $(show_id "${MAN[can.id]}")${MAN[can.label]:+ (Label: $(short_label "${MAN[can.label]}"))}"
     notes="$(version_notes)"
@@ -111,6 +115,7 @@ build_comparison() {
         open_can "$minus_can" "$CC_TMP/can-minus"
         local minus_home="${MAN[can.home]}"
         m_id="${MAN[can.id]}"
+        CMP_MINUS_REF="$(can_ref "$minus_can" "$m_id")"
         minus_label="Can $(show_id "$m_id")${MAN[can.label]:+ (Label: $(short_label "${MAN[can.label]}"))}"
         notes="$(versions_between "$p_id" "$p_rel" "$p_ed" "$p_cin" "$p_arch")"
         notes_title="The two cans were made on different versions:"
@@ -127,19 +132,27 @@ build_comparison() {
     compare_views "$CMP_MINUS" "$CMP_PLUS" "$CMP_RESULT" "${CMP_ITEMS[@]}"
     CMP_TOTAL="$(wc -l < "$CMP_RESULT")"
     CMP_SYSTEM="$(awk -F'\t' '$2 == "system" || $3 == "(time zone)"' "$CMP_RESULT" | wc -l)"
+    check_refs "$CMP_PLUS" > "$CMP_REFS"
 
-    {
-        # The two sides, with the same "-" and "+" as the lines below.
-        info "Comparing:" "${C_RED}(-)${C_RESET} $minus_label" "${C_GREEN}(+)${C_RESET} $plus_label"
-        show_version_notes "$notes" "$notes_title"
-        # Two cans only: what could not be compared (see resplit_tree).
-        [ -z "$m_id" ] || show_left_out "$CC_TMP/left-out.txt" "$m_id" "$p_id"
-        render_diff
-        check_refs "$CMP_PLUS" > "$CC_TMP/refs.txt"
-        show_missing "$CC_TMP/refs.txt" "$CMP_PLUS"
-        say ""
-        summary_line
-    } > "$CMP_REPORT"
+    # Kept for the report (diff_report), which is written separately.
+    CMP_MINUS_LABEL="$minus_label" CMP_PLUS_LABEL="$plus_label"
+    CMP_NOTES="$notes" CMP_NOTES_TITLE="$notes_title"
+    CMP_MINUS_ID="$m_id"
+}
+
+# diff_report -> the whole comparison that build_comparison made, as
+#   "diff" shows it: the two sides, warnings, every difference, what is
+#   not installed here, and the summary.
+diff_report() {
+    # The two sides, with the same "-" and "+" as the lines below.
+    info "Comparing:" "${C_RED}(-)${C_RESET} $CMP_MINUS_LABEL" "${C_GREEN}(+)${C_RESET} $CMP_PLUS_LABEL"
+    show_version_notes "$CMP_NOTES" "$CMP_NOTES_TITLE"
+    # Two cans only: what could not be compared (see resplit_tree).
+    [ -z "$CMP_MINUS_ID" ] || show_left_out "$CC_TMP/left-out.txt" "$CMP_MINUS_ID" "$CMP_PLUS_ID"
+    render_diff
+    show_missing "$CMP_REFS" "$CMP_PLUS"
+    say ""
+    summary_line
 }
 
 
@@ -254,7 +267,8 @@ resplit_takers() {
 # show_left_out FILE MINUS_ID PLUS_ID -> a warning for the files of the "-"
 #   can that no item of the "+" can takes (FILE: see resplit_tree), with
 #   the item each was in. They are not compared, so without this line
-#   "No differences" could be read as "the two cans hold the same".
+#   "No differences" could be read as "the two cans hold the same". The
+#   command it shows names the cans as CMP_PLUS_REF / CMP_MINUS_REF do.
 show_left_out() {
     [ -s "$1" ] || return 0
     local lines=() l
@@ -264,7 +278,8 @@ show_left_out() {
                     END { for (i = 1; i <= n; i++) print order[i] ": " c[order[i]] " file(s)" }' "$1")
     msg_lines "$B_WARN" \
         "Not compared: $(wc -l < "$1") file(s) in can $(show_id "$2") that no item of can $(show_id "$3") takes:" \
-        "${lines[@]}" "To see them, compare the other way round:" "\$ cinnamon-can diff $3 $2"
+        "${lines[@]}" "To see them, compare the other way round:" \
+        "\$ cinnamon-can$(config_option) diff $CMP_PLUS_REF $CMP_MINUS_REF"
 }
 
 # prepare_view SRC SRC_HOME OUT FIX_WALLPAPER ITEM...
@@ -608,18 +623,25 @@ diff_body() {
 #   green = nothing, yellow = differs (system changes: the colour of
 #   [SUDO REQUIRED], also yellow), red = missing.
 summary_line() {
-    local s f y m
+    count_differences
+    info "Summary of the comparison above:" \
+        "${SUB}$(status_dot "$CNT_SETTINGS" "$C_YELLOW") $CNT_SETTINGS setting(s) differ" \
+        "${SUB}$(status_dot "$CNT_FILES" "$C_YELLOW") $CNT_FILES file(s) differ" \
+        "${SUB}$(status_dot "$CNT_SYSTEM" "$C_SUDO") $CNT_SYSTEM system change(s) differ (only with sudo)" \
+        "${SUB}$(status_dot "$CNT_MISSING" "$C_RED") $CNT_MISSING thing(s) used by the can but not installed here (listed above)"
+}
+
+# count_differences -> CNT_SETTINGS, CNT_FILES, CNT_SYSTEM and CNT_MISSING:
+#   how many lines of each kind the comparison found ("diff" and "open"
+#   count the same way).
+CNT_SETTINGS=0 CNT_FILES=0 CNT_SYSTEM=0 CNT_MISSING=0
+count_differences() {
     # The time zone needs sudo, so it counts as a system change here --
     # the same way its SUDO REQUIRED mark and the "open" messages do.
-    s="$(awk -F'\t' '$2 == "setting" && $3 != "(time zone)"' "$CMP_RESULT" | wc -l)"
-    f="$(awk -F'\t' '$2 == "file" || $2 == "crontab"' "$CMP_RESULT" | wc -l)"
-    y="$(awk -F'\t' '$2 == "system" || $3 == "(time zone)"' "$CMP_RESULT" | wc -l)"
-    m="$(wc -l < "$CC_TMP/refs.txt")"
-    info "Summary of the comparison above:" \
-        "${SUB}$(status_dot "$s" "$C_YELLOW") $s setting(s) differ" \
-        "${SUB}$(status_dot "$f" "$C_YELLOW") $f file(s) differ" \
-        "${SUB}$(status_dot "$y" "$C_SUDO") $y system change(s) differ (only with sudo)" \
-        "${SUB}$(status_dot "$m" "$C_RED") $m thing(s) used by the can but not installed here (listed above)"
+    CNT_SETTINGS="$(awk -F'\t' '$2 == "setting" && $3 != "(time zone)"' "$CMP_RESULT" | wc -l)"
+    CNT_FILES="$(awk -F'\t' '$2 == "file" || $2 == "crontab"' "$CMP_RESULT" | wc -l)"
+    CNT_SYSTEM="$(awk -F'\t' '$2 == "system" || $3 == "(time zone)"' "$CMP_RESULT" | wc -l)"
+    CNT_MISSING="$(wc -l < "$CMP_REFS")"
 }
 
 # status_dot COUNT COLOUR -> a green dot for 0, else a dot in COLOUR.

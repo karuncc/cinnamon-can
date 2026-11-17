@@ -9,9 +9,9 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
 
 - `seal [-L TEXT]` makes a can, `list` shows cans, `peek CAN` shows what is
   inside, `diff CAN [CAN2]` compares, `open CAN` makes the computer match a
-  can (shows the diff, asks for `yes`, saves an "autocan" first, then
-  asks whether to restart the computer), `label CAN TEXT` gives a can
-  another label, `delete CAN...` deletes cans (asks for `yes`).
+  can (shows a summary of the changes, asks for `yes`, saves an "autocan"
+  first, then asks whether to restart the computer), `label CAN TEXT`
+  gives a can another label, `delete CAN...` deletes cans (asks for `yes`).
 - Goal: after `open` on another computer, the desktop looks, is arranged
   and feels (mouse, keyboard) exactly the same, except for apps that are
   installed differently. Personal things and pure hardware (screens,
@@ -60,7 +60,7 @@ lib/refs.sh           finds what a can uses that is not installed here,
 lib/list.sh           list, peek, reading cans and manifests
 lib/diff.sh           views, comparison, the diff report
 lib/seal.sh           seal, package_can
-lib/open.sh           open: confirm, autocan, apply, log, restart
+lib/open.sh           open: summary, confirm, autocan, apply, log, restart
 lib/manage.sh         label (swaps only the manifest), delete
 test/run-tests.sh     the test script (safe to run on this computer)
 config/example.conf   the documented example config (the only tracked one)
@@ -141,12 +141,15 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   `delete`).
 - A command for the user to type is a message line that starts with
   `$ `: it gets a grey `$` in the left column and can be copied as it is.
-  Can IDs go through `show_id` (grey block, or `[ID]`), but never inside
-  such a command.
+  So a path in it goes through `shell_word` (quoted when it has spaces), a
+  can through `can_ref` (its ID, or its path when it was opened from
+  elsewhere), and `config_option` repeats the `-c` the program was started
+  with. Can IDs go through `show_id` (grey block, or `[ID]`), but never
+  inside such a command.
 - Sentences start with a capital letter, labels the program writes too.
 - `warn` and `err` go to stderr; a warning that is part of a report
-  (`diff`, `seal`, `list`) uses `msg_lines "$B_WARN"` on stdout, so it
-  stays in its place on the page.
+  (`diff`, `seal`, `list`, the summary of `open`) uses
+  `msg_lines "$B_WARN"` on stdout, so it stays in its place on the page.
 
 ## Testing
 
@@ -156,9 +159,11 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
       bash test/run-tests.sh
 
   It needs no set-up, writes only into its own temporary folder, and
-  never touches the real backup folder or any setting: `open` is only
-  exercised in the two cases where it stops by itself, with closed input
-  and a fake `systemctl` first in PATH; its restart question is tried on
+  never touches the real backup folder or any setting: `open` only ever
+  gets closed input, so it can never read a `yes`, and a fake `systemctl`
+  is first in PATH. It stops by itself on a can that already matches, on
+  one where only system files differ, and right after its summary on one
+  that differs (no terminal to ask in); its restart question is tried on
   its own, with that fake. `delete` gets its answers through `script`
   (which gives it a terminal) and only deletes the test's own cans. A
   few tests compare a can against
