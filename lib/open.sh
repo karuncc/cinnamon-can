@@ -4,15 +4,18 @@
 #   sudo cinnamon-can open CAN     ... and the system files too
 #
 # In order:
-#   1. Show the same comparison as "diff CAN" (with a warning on top when
-#      the can comes from another Mint / Cinnamon version).
+#   1. Show which can, and a summary of what opening it changes: how many
+#      settings, files and system changes, the files it deletes, and what
+#      the can uses that is not installed here (with a warning on top when
+#      the can comes from another Mint / Cinnamon version). Every change
+#      itself is shown by "diff CAN".
 #   2. Ask you to type "yes". Anything else changes nothing.
 #   3. Save the current state as a new "autocan", so it can be undone
 #      with "cinnamon-can open <that ID>".
 #   4. Write: files first (so applets find their settings files), then the
 #      settings database, the language, the system files (only with sudo),
 #      and ask fcitx to reload. Files the can does not have are deleted
-#      (they were listed as "deleted" in the comparison); system files are
+#      (the summary names them); system files are
 #      never deleted. Ctrl+C is switched off while this runs (a few
 #      seconds), so the computer is never left half old, half new.
 #   5. Write the log, show how to undo, and ask whether to restart now:
@@ -32,13 +35,23 @@ cmd_open() {
 
     build_comparison "$1"
     can_id="$CMP_PLUS_ID"
-    diff_report > "$CC_TMP/report.txt"
-    show_paged "$CC_TMP/report.txt"
 
+    # Which can, and on which versions when they differ from this computer.
+    read_manifest "$CC_TMP/can-plus/manifest.txt"
+    say ""
+    can_header "Opening the can $(show_id "$can_id") ..."
+    show_version_notes "$CMP_NOTES" "$CMP_NOTES_TITLE"
     if [ "$CMP_TOTAL" -eq 0 ]; then
         say ""; ok "This computer's settings already match the can $(show_id "$can_id")"
         return 0
     fi
+
+    # What it changes, in short; "diff" shows every change.
+    open_summary
+    say ""
+    say "To see every change first, run:"
+    say "\$ cinnamon-can$(config_option) diff $CMP_PLUS_REF"
+
     # sudo does not search ~/.local/bin, so always show the full path.
     local sudo_cmd
     sudo_cmd="sudo $(shell_word "$(to_tilde "$CC_ROOT/cinnamon-can")")$(config_option) open $CMP_PLUS_REF"
@@ -104,6 +117,32 @@ cmd_open() {
     msg_lines "$B_UNDO" "To go back to how this computer was, run:" "\$ cinnamon-can$(config_option) open $undo_id"
     say ""
     ask_restart "$problems"
+}
+
+
+# open_summary -> what opening the can changes, in short: how many
+#   settings, files and system changes; the files it deletes, by name
+#   (deleting your own work deserves more than a number); and what the
+#   can uses that is not installed here, with the commands to install it.
+open_summary() {
+    local deleted=() kind path
+    count_differences
+    say ""
+    info "Opening it changes on this computer:" \
+        "${SUB}$(status_dot "$CNT_SETTINGS" "$C_YELLOW") $CNT_SETTINGS setting(s)" \
+        "${SUB}$(status_dot "$CNT_FILES" "$C_YELLOW") $CNT_FILES file(s)" \
+        "${SUB}$(status_dot "$CNT_SYSTEM" "$C_SUDO") $CNT_SYSTEM system change(s) (only with sudo)"
+    # Home files and the crontab the can does not have (system files are
+    # never deleted).
+    while IFS=$'\t' read -r kind path; do
+        deleted+=("${SUB}$(show_path "$kind" "$path")")
+    done < <(awk -F'\t' -v OFS='\t' '$4 == "removed" && ($2 == "file" || $2 == "crontab") { print $2, $3 }' "$CMP_RESULT" | sort -t$'\t' -k2,2)
+    if [ "${#deleted[@]}" -gt 0 ]; then
+        say ""
+        msg_lines "$B_WARN" "It deletes ${#deleted[@]} file(s) that the can does not have:" "${deleted[@]}" \
+            "${C_GREY}The autocan, sealed before anything changes, keeps a copy.${C_RESET}"
+    fi
+    show_missing "$CMP_REFS" "$CMP_PLUS"
 }
 
 

@@ -622,18 +622,25 @@ diff_body() {
 #   green = nothing, yellow = differs (system changes: the colour of
 #   [SUDO REQUIRED], also yellow), red = missing.
 summary_line() {
-    local s f y m
+    count_differences
+    info "Summary of the comparison above:" \
+        "${SUB}$(status_dot "$CNT_SETTINGS" "$C_YELLOW") $CNT_SETTINGS setting(s) differ" \
+        "${SUB}$(status_dot "$CNT_FILES" "$C_YELLOW") $CNT_FILES file(s) differ" \
+        "${SUB}$(status_dot "$CNT_SYSTEM" "$C_SUDO") $CNT_SYSTEM system change(s) differ (only with sudo)" \
+        "${SUB}$(status_dot "$CNT_MISSING" "$C_RED") $CNT_MISSING thing(s) used by the can but not installed here (listed above)"
+}
+
+# count_differences -> CNT_SETTINGS, CNT_FILES, CNT_SYSTEM and CNT_MISSING:
+#   how many lines of each kind the comparison found ("diff" and "open"
+#   count the same way).
+CNT_SETTINGS=0 CNT_FILES=0 CNT_SYSTEM=0 CNT_MISSING=0
+count_differences() {
     # The time zone needs sudo, so it counts as a system change here --
     # the same way its SUDO REQUIRED mark and the "open" messages do.
-    s="$(awk -F'\t' '$2 == "setting" && $3 != "(time zone)"' "$CMP_RESULT" | wc -l)"
-    f="$(awk -F'\t' '$2 == "file" || $2 == "crontab"' "$CMP_RESULT" | wc -l)"
-    y="$(awk -F'\t' '$2 == "system" || $3 == "(time zone)"' "$CMP_RESULT" | wc -l)"
-    m="$(wc -l < "$CMP_REFS")"
-    info "Summary of the comparison above:" \
-        "${SUB}$(status_dot "$s" "$C_YELLOW") $s setting(s) differ" \
-        "${SUB}$(status_dot "$f" "$C_YELLOW") $f file(s) differ" \
-        "${SUB}$(status_dot "$y" "$C_SUDO") $y system change(s) differ (only with sudo)" \
-        "${SUB}$(status_dot "$m" "$C_RED") $m thing(s) used by the can but not installed here (listed above)"
+    CNT_SETTINGS="$(awk -F'\t' '$2 == "setting" && $3 != "(time zone)"' "$CMP_RESULT" | wc -l)"
+    CNT_FILES="$(awk -F'\t' '$2 == "file" || $2 == "crontab"' "$CMP_RESULT" | wc -l)"
+    CNT_SYSTEM="$(awk -F'\t' '$2 == "system" || $3 == "(time zone)"' "$CMP_RESULT" | wc -l)"
+    CNT_MISSING="$(wc -l < "$CMP_REFS")"
 }
 
 # status_dot COUNT COLOUR -> a green dot for 0, else a dot in COLOUR.

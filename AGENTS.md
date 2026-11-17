@@ -9,9 +9,9 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
 
 - `seal [-L TEXT]` makes a can, `list` shows cans, `peek CAN` shows what is
   inside, `diff CAN [CAN2]` compares, `open CAN` makes the computer match a
-  can (shows the diff, asks for `yes`, saves an "autocan" first, then
-  asks whether to restart the computer), `label CAN TEXT` gives a can
-  another label, `delete CAN...` deletes cans (asks for `yes`).
+  can (shows a summary of the changes, asks for `yes`, saves an "autocan"
+  first, then asks whether to restart the computer), `label CAN TEXT`
+  gives a can another label, `delete CAN...` deletes cans (asks for `yes`).
 - Goal: after `open` on another computer, the desktop looks, is arranged
   and feels (mouse, keyboard) exactly the same, except for apps that are
   installed differently. Personal things and pure hardware (screens,
@@ -159,9 +159,11 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
       bash test/run-tests.sh
 
   It needs no set-up, writes only into its own temporary folder, and
-  never touches the real backup folder or any setting: `open` is only
-  exercised in the two cases where it stops by itself, with closed input
-  and a fake `systemctl` first in PATH; its restart question is tried on
+  never touches the real backup folder or any setting: `open` only ever
+  gets closed input, so it can never read a `yes`, and a fake `systemctl`
+  is first in PATH. It stops by itself on a can that already matches, on
+  one where only system files differ, and right after its summary on one
+  that differs (no terminal to ask in); its restart question is tried on
   its own, with that fake. `delete` gets its answers through `script`
   (which gives it a terminal) and only deletes the test's own cans. A
   few tests compare a can against

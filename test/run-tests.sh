@@ -202,7 +202,7 @@ if [ -d "$U/items/system/root" ]; then
     run s out "$CC" -c "$CONF" open SYS2
     check "open stops when only system files differ"  [ "$s" -eq 0 ]
     check "open shows the sudo command for them"      has "$out" "       \$ sudo "
-    check "... and marks the system file"             has "$out" "[SUDO REQUIRED]"
+    check "... and counts it in the summary"          sh -c 'printf "%s" "$1" | grep -qE "└ ● [1-9][0-9]* system change\(s\) \(only with sudo\)"' sh "$out"
 else
     printf '  skip the can has no system files on this computer\n'
 fi
@@ -233,6 +233,29 @@ l1="$(printf '%s\n' "$out" | grep -nF -m1 'cc-test-key'      | cut -d: -f1)" || 
 l2="$(printf '%s\n' "$out" | grep -nF -m1 'cc-test-file.txt' | cut -d: -f1)" || true
 check "inside an item, settings come before files" \
     test -n "$l1" -a -n "$l2" -a "$l1" -lt "$l2"
+
+# "open" shows a summary, not every change. With closed input it cannot
+# ask for "yes", so it stops right after the summary: nothing is changed.
+run s out "$CC" -c "$CONF" open TES2
+check "open: a summary, one row per kind"            sh -c 'for w in "● 1 setting(s)" "● 2 file(s)" "● 0 system change(s) (only with sudo)"; do printf "%s" "$1" | grep -qF "└ $w" || exit 1; done' sh "$out"
+check "... not every change"                         hasnt "$out" "cc-added-line"
+check "... nothing to delete, so no such warning"    hasnt "$out" "It deletes"
+check "... the command that shows every change"      has "$out" "       \$ cinnamon-can -c ${CONF/#"$HOME"\//\~/} diff TES2"
+check "... then it stops: no terminal to ask in"     sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "Command \"open\" needs to be confirmed in a terminal"' sh "$s" "$out"
+# A can without a file this computer has: open would delete it, and the
+# summary names it.
+U="$TMP/unpack-deletes"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+G="$(find "$U/items" -path '*/home/*' -type f | head -n 1)"
+if [ -n "$G" ]; then
+    rm "$G"
+    sed -i 's/^id[[:space:]]*=.*/id = DEL2/' "$U/manifest.txt"
+    ( cd "$U" && tar -czf "$TMP/cans/manual-DEL2-20300101T000021+0000.tar.gz.canned" . )
+    run s out "$CC" -c "$CONF" open DEL2
+    check "open names each file it would delete"     has "$out" "         └ ~/${G#"$U"/items/*/home/}"
+    check "... under a warning that counts them"     has "$out" "   WARN  It deletes 1 file(s) that the can does not have:"
+else
+    printf '  skip the can has no home files\n'
+fi
 
 # Two cans made on different versions: the difference is named.
 U="$TMP/unpack-version"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
