@@ -92,6 +92,24 @@ run s out "$CC" frobnicate
 check "unknown command: exit 2"        [ "$s" -eq 2 ]
 check "unknown command: message"       has "$out" "  ERROR  Unknown command"
 check "... the hint starts under it"   has "$out" "$(printf '\n         Run "cinnamon-can help"')"
+# No config yet, and the program in a folder with spaces in its name: the
+# commands it shows to copy still work as they are.
+SP="$TMP/my programs/cinnamon can"; mkdir -p "$SP/config"
+cp -r "$ROOT/cinnamon-can" "$ROOT/lib" "$ROOT/items" "$SP/"
+cp "$ROOT/config/example.conf" "$SP/config/"
+run s out "$SP/cinnamon-can" list
+line="$(printf '%s\n' "$out" | sed -n 's/^       \$ \(cd .*\)$/\1/p')"
+check "no config: the cd command quotes a path with spaces"  has "$line" "'"
+check "... and works when copied"                             bash -c "$line && test -f config/example.conf"
+# A config named by its path, with a space in it: the command to copy
+# keeps it, so it finds the same (empty) backup folder.
+mkdir -p "$TMP/my conf" "$TMP/no cans yet"
+printf '[general]\nbackup_dir = %s\n' "$TMP/no cans yet" > "$TMP/my conf/test.conf"
+run s out "$CC" -c "$TMP/my conf/test.conf" list
+line="$(printf '%s\n' "$out" | sed -n 's/^       \$ cinnamon-can \(.*\) seal -L "My first can"$/\1/p')"
+check "no cans yet: the command keeps the -c it was given"   has "$line" "-c "
+run s out bash -c '"$0" '"$line"' list' "$CC"
+check "... and that part works when copied"                  has "$out" "none yet"
 run s out "$CC" -c no-such-config list
 check "missing config: exit 1"         [ "$s" -eq 1 ]
 check "missing config: message"        has "$out" "Provided config file not found: config/no-such-config.conf"
@@ -312,7 +330,16 @@ pack "$U" LFT2 13
 run s out "$CC" -c "$CONF" diff LFT2 "$BASEID"
 check "files no item of the + can takes: a warning"  has "$out" "   WARN  Not compared: 2 file(s) in can [LFT2] that no item of can [$BASEID] takes:"
 check "... with the item they were in"               has "$out" "         └ cc-extra: 2 file(s)"
-check "... and the command that shows them"          has "$out" "       \$ cinnamon-can diff $BASEID LFT2"
+check "... and the command that shows them, with -c" has "$out" "       \$ cinnamon-can -c ${CONF/#"$HOME"\//\~/} diff $BASEID LFT2"
+# The same two cans opened from another folder (a USB stick, say): the
+# command names them by their paths, and works when copied.
+mkdir -p "$TMP/usb stick"
+cp "$TMP/cans/"*-LFT2-*.canned "$TMP/cans/"*-"$BASEID"-*.canned "$TMP/usb stick/"
+run s out "$CC" -c "$CONF" diff "$TMP/usb stick/"*-LFT2-*.canned "$TMP/usb stick/"*-"$BASEID"-*.canned
+line="$(printf '%s\n' "$out" | sed -n 's/^       \$ cinnamon-can \(.*\)$/\1/p')"
+check "cans opened by path: the command names the paths"  has "$line" "usb stick"
+run s out bash -c '"$0" '"$line" "$CC"
+check "... and works when copied"                         has "$out" "   [NEW] └ • ~/.config/cc test/a b.conf  (+1 | -0)"
 run s out "$CC" -c "$CONF" diff "$BASEID" LFT2
 check "the other way round they are new files"       has "$out" "   [NEW] └ • ~/.config/cc test/a b.conf  (+1 | -0)"
 check "a link that points nowhere: no line count"    sh -c 'printf "%s\n" "$1" | grep -qxF "   [NEW] └ • ~/.config/cc test/link"' sh "$out"

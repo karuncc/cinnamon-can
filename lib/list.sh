@@ -178,7 +178,7 @@ list_report() {
     local f line id skipped=() start more=()
     say ""
     if [ -z "$(all_cans)" ]; then
-        info "Cans stored in $(to_tilde "$(backup_dir)"): none yet. Make one with:" "\$ cinnamon-can seal -L \"My first can\""
+        info "Cans stored in $(to_tilde "$(backup_dir)"): none yet. Make one with:" "\$ cinnamon-can$(config_option) seal -L \"My first can\""
         return 0
     fi
     info "Cans stored in $(to_tilde "$(backup_dir)"):"

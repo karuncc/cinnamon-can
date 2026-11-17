@@ -105,6 +105,7 @@ main() {
 
     load_system_facts
     startup_checks
+    CC_CONFIG_ARG="$config_name"    # for the commands the program shows to copy
     load_config "$config_name"
     load_items "$CC_ROOT/items" "$USER_ITEMS_DIR"
     check_config_items

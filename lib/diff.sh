@@ -40,6 +40,7 @@ cmd_diff() {
 # Results of build_comparison, used by "diff" and "open":
 CMP_MINUS="" CMP_PLUS="" CMP_RESULT="" CMP_REPORT="" CMP_TOTAL=0 CMP_SYSTEM=0
 CMP_PLUS_ID=""
+CMP_PLUS_REF="" CMP_MINUS_REF=""   # how a command to copy names each can (can_ref)
 CMP_ITEMS=()
 
 # version_notes -> what differs between the opened can (MAN) and this
@@ -85,6 +86,7 @@ build_comparison() {
     # The "+" side is always a can; its own catalog decides what is what.
     open_can "$plus_can" "$CC_TMP/can-plus"
     CMP_PLUS_ID="${MAN[can.id]}"
+    CMP_PLUS_REF="$(can_ref "$plus_can" "$CMP_PLUS_ID")"
     local plus_home="${MAN[can.home]}" plus_label
     plus_label="Can $(show_id "${MAN[can.id]}")${MAN[can.label]:+ (Label: $(short_label "${MAN[can.label]}"))}"
     notes="$(version_notes)"
@@ -111,6 +113,7 @@ build_comparison() {
         open_can "$minus_can" "$CC_TMP/can-minus"
         local minus_home="${MAN[can.home]}"
         m_id="${MAN[can.id]}"
+        CMP_MINUS_REF="$(can_ref "$minus_can" "$m_id")"
         minus_label="Can $(show_id "$m_id")${MAN[can.label]:+ (Label: $(short_label "${MAN[can.label]}"))}"
         notes="$(versions_between "$p_id" "$p_rel" "$p_ed" "$p_cin" "$p_arch")"
         notes_title="The two cans were made on different versions:"
@@ -264,7 +267,8 @@ show_left_out() {
                     END { for (i = 1; i <= n; i++) print order[i] ": " c[order[i]] " file(s)" }' "$1")
     msg_lines "$B_WARN" \
         "Not compared: $(wc -l < "$1") file(s) in can $(show_id "$2") that no item of can $(show_id "$3") takes:" \
-        "${lines[@]}" "To see them, compare the other way round:" "\$ cinnamon-can diff $3 $2"
+        "${lines[@]}" "To see them, compare the other way round:" \
+        "\$ cinnamon-can$(config_option) diff $CMP_PLUS_REF $CMP_MINUS_REF"
 }
 
 # prepare_view SRC SRC_HOME OUT FIX_WALLPAPER ITEM...

@@ -322,6 +322,7 @@ split_words() {
 # create one from config/example.conf. Every mistake is reported at once.
 
 CONF_FILE=""
+CC_CONFIG_ARG=""               # what you typed after -c (empty: none)
 CONF_BACKUP_DIR="~/cinnamon-cans"
 declare -A CONF_ITEMS=()       # item name -> yes | no
 declare -A CONF_ITEM_LINES=()  # item name -> its line(s) in the config
@@ -346,7 +347,7 @@ load_config() {
         if [ -z "$1" ]; then
             die "No config found at config/default.conf" \
                 "Create your own default config file using:" \
-                "\$ cd $(to_tilde "$CC_ROOT")" \
+                "\$ cd $(shell_word "$(to_tilde "$CC_ROOT")")" \
                 "\$ cp config/example.conf config/default.conf"
         fi
         die "Provided config file not found: $(conf_name 41)"
@@ -522,6 +523,15 @@ resolve_can() {
     die "Can file not found: $what"
 }
 
+# can_ref FILE ID -> how a command to copy names that can: by its ID when
+#   the ID finds this very file in the backup folder, else by its path (a
+#   can opened from a USB stick, for example).
+can_ref() {
+    local f
+    if f="$(find_can "$2")" && [ "$f" -ef "$1" ]; then printf '%s' "$2"
+    else shell_word "$(to_tilde "$1")"; fi
+}
+
 # A label is one short line of text you give a can (seal -L, label).
 LABEL_MAX=40
 
@@ -582,6 +592,32 @@ to_tilde() {
         "$HOME"/*) printf '~/%s\n' "${1#"$HOME"/}" ;;
         *)         printf '%s\n' "$1" ;;
     esac
+}
+
+# shell_word WORD -> WORD written so that it can be typed (or pasted) into
+#   a terminal as one word: as it is when it holds only plain characters,
+#   else in single quotes. A leading "~/" stays outside the quotes, so the
+#   terminal still reads it as your home folder.
+#   Examples:  ~/repos/cinnamon-can     ~/'My Programs/cinnamon can'
+shell_word() {
+    local w="$1" start=""
+    [ "$w" != "~" ] || { printf '~'; return 0; }
+    case "$w" in "~/"*) start="~/" w="${w#\~/}" ;; esac
+    if [[ "$w" =~ ^[A-Za-z0-9_./:@%+=,-]+$ ]]; then printf '%s%s' "$start" "$w"
+    else printf "%s'%s'" "$start" "${w//\'/\'\\\'\'}"; fi
+}
+
+# config_option -> " -c CONFIG" when the program was started with -c, so a
+#   command to copy uses the same config (and finds the same cans);
+#   nothing otherwise. A config named by its path is written in full, so
+#   the command also works from another folder.
+config_option() {
+    [ -n "$CC_CONFIG_ARG" ] || return 0
+    if [[ "$CC_CONFIG_ARG" == */* || "$CC_CONFIG_ARG" == *.conf ]]; then
+        printf ' -c %s' "$(shell_word "$(to_tilde "$(cd "$(dirname "$CONF_FILE")" && pwd)/$(basename "$CONF_FILE")")")"
+    else
+        printf ' -c %s' "$(shell_word "$CC_CONFIG_ARG")"
+    fi
 }
 
 # rel_path PATH -> a path inside the program's folder written from there

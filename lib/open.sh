@@ -39,7 +39,8 @@ cmd_open() {
         return 0
     fi
     # sudo does not search ~/.local/bin, so always show the full path.
-    local sudo_cmd="sudo $(to_tilde "$CC_ROOT/cinnamon-can") open $can_id"
+    local sudo_cmd
+    sudo_cmd="sudo $(shell_word "$(to_tilde "$CC_ROOT/cinnamon-can")")$(config_option) open $CMP_PLUS_REF"
     if [ "$CMP_SYSTEM" -gt 0 ] && [ "$with_system" != "1" ]; then
         say ""
         if [ "$CMP_SYSTEM" -eq "$CMP_TOTAL" ]; then
@@ -99,7 +100,7 @@ cmd_open() {
     # The way back, on its own with an empty line above and below, so it
     # is easy to find (and to copy) right above the restart question.
     say ""
-    msg_lines "$B_UNDO" "To go back to how this computer was, run:" "\$ cinnamon-can open $undo_id"
+    msg_lines "$B_UNDO" "To go back to how this computer was, run:" "\$ cinnamon-can$(config_option) open $undo_id"
     say ""
     ask_restart "$problems"
 }
