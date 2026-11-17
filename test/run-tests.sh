@@ -536,6 +536,13 @@ if command -v script >/dev/null 2>&1; then
     # On 40 columns the message alone nearly fills the line: 10 characters stay.
     s=0; out="$(COLS=40 in_terminal "" -c "a-config-file-name-typed-by-hand-that-is-far-too-long-for-the-line" list)" || s=$?
     check "... also on a very narrow screen"           sh -c 'printf "%s\n" "$1" | grep -qxF "  ERROR  Provided config file not found: …line.conf"' sh "$out"
+    # A pager that marks every line it shows: "list" must not use it,
+    # "diff" still does (so the check itself can see a pager at work).
+    paged() { script -qec "env PAGER='sed s/^/PAGED:/' $(printf '%q ' "$CC" -c "$CONF" "$@")" /dev/null | tr -d '\r'; }
+    out="$(paged list)" || true
+    check "list in a terminal: printed directly, no pager" hasnt "$out" "PAGED:"
+    out="$(paged diff "$BASEID" TES2)" || true
+    check "... while diff still uses the pager"            has "$out" "PAGED:"
 else
     printf '  skip "script" is missing: what only shows in a terminal is not tried\n'
 fi

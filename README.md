@@ -248,8 +248,8 @@ How to read it:
 - The dots of the summary: green when nothing differs, yellow when
   something does (system changes too), red for what is missing here.
 
-`diff` and `list` show long output page by page with `less`; set `PAGER`
-to use another program.
+`diff` shows long output page by page with `less`; set `PAGER` to use
+another program.
 
 ### Open a can
 

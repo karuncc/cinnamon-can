@@ -167,10 +167,9 @@ software_row() {
 cmd_list() {
     [ $# -eq 0 ] || die "Command \"list\" takes no arguments"
     make_tmpdir
-    # The list grows with every seal and open: shown page by page (like
-    # diff) when it is longer than the screen.
-    list_report > "$CC_TMP/list.txt"
-    show_paged "$CC_TMP/list.txt"
+    # Printed straight to the screen, without a pager: one line per can,
+    # and the terminal scrolls back when the list gets long.
+    list_report
 }
 
 # list_report -> the whole list, as cmd_list shows it.
