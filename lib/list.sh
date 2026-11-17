@@ -34,16 +34,30 @@ manifest_complete() {
 
 # open_can PATH DIR -> unpacks a can into DIR and reads its manifest.
 open_can() {
-    local can="$1" dir="$2" file
-    file="${SUB}$(file_dot "$(to_tilde "$can")")"      # the can, on its own line
+    local can="$1" dir="$2"
     rm -rf "$dir"; mkdir -p "$dir"
-    tar -C "$dir" -xzf "$can" 2>/dev/null \
-        || die "The specified can cannot be unpacked; it is damaged or not a can:" "$file"
-    [ -f "$dir/manifest.txt" ] \
-        || die "The specified can has no manifest; it was not made by cinnamon-can:" "$file"
+    tar -C "$dir" -xzf "$can" 2>/dev/null || not_a_can "$can" damaged
+    [ -f "$dir/manifest.txt" ] || not_a_can "$can" no-manifest
     read_manifest "$dir/manifest.txt"
-    manifest_complete \
-        || die "The specified can has an incomplete manifest; it was not made by cinnamon-can:" "$file"
+    manifest_complete || not_a_can "$can" incomplete
+}
+
+# not_a_can PATH WHY -> stops with what is wrong with the can (WHY:
+#   damaged, no-manifest or incomplete), the can on its own line under it.
+not_a_can() {
+    local why
+    case "$2" in
+        damaged)     why="cannot be unpacked; it is damaged or not a can" ;;
+        no-manifest) why="has no manifest; it was not made by cinnamon-can" ;;
+        *)           why="has an incomplete manifest; it was not made by cinnamon-can" ;;
+    esac
+    die "The specified can $why:" "${SUB}$(file_dot "$(to_tilde "$1")")"
+}
+
+# label_or_none TEXT -> TEXT, or a grey "(none)" when there is no label,
+#   so it does not read like a label.
+label_or_none() {
+    if [ -n "$1" ]; then printf '%s' "$1"; else printf '%s(none)%s' "$C_GREY" "$C_RESET"; fi
 }
 
 # tree_items TREE -> the items stored in a tree, in catalog order.
@@ -62,9 +76,8 @@ tree_items() {
 #   (The Mint edition is left out: it is always Cinnamon, since
 #   cinnamon-can runs on nothing else.)
 can_header() {
-    local c="${MAN[can.created]}" label="${MAN[can.label]:-}" more=()
-    [ -n "$label" ] || label="${C_GREY}(none)${C_RESET}"
-    more+=("${SUB}Label: $label")
+    local c="${MAN[can.created]}" more=()
+    more+=("${SUB}Label: $(label_or_none "${MAN[can.label]:-}")")
     [ -z "${MAN[can.opened]:-}" ] \
         || more+=("${SUB}Kind:  autocan, saved just before opening can $(show_id "${MAN[can.opened]}")")
     more+=("${SUB}When:  ${c:0:10} ${c:11:8} ${c:19}"

@@ -9,6 +9,7 @@ cinnamon-can list                       # all cans, with their IDs
 cinnamon-can peek K7Q2                  # what is inside can K7Q2
 cinnamon-can diff K7Q2                  # what would change
 cinnamon-can open K7Q2                  # make this computer match it
+cinnamon-can label K7Q2 "Old desktop"   # give it another label
 ```
 
 It is plain `bash` and `awk` and uses only tools that come with Mint.
@@ -115,7 +116,8 @@ items (see "Your own items"); the grey `•` that starts a table's heading
 row is only the point its rows hang from.
 
 A label is one line of at most 40 characters (a Thai vowel or tone mark
-counts as one).
+counts as one); you can change it later with `label` (see "Change a
+label").
 
 ### Find a can
 
@@ -307,6 +309,16 @@ System files are never deleted.
 **Undo:** `cinnamon-can open <the autocan's ID>` — shown at the end of every
 `open`, and found in `list` / the log.
 
+### Change a label
+
+```
+cinnamon-can label K7Q2 "Before upgrade to 22.3"
+cinnamon-can label K7Q2 ""          # no label
+```
+
+`label` changes only the label inside the can: its ID, its file name and
+everything else in it stay as they are. It works on autocans too.
+
 ---
 
 ## What is kept
@@ -468,7 +480,8 @@ A can is a `.tar.gz` file with this inside:
 | `items/ITEM/wallpaper/` | the wallpaper image |
 | `items/ITEM/*.txt` | wallpaper name, language, time zone, software list, crontab |
 
-The log, `~/cinnamon-cans/cinnamon-can.log`, records every `seal` and `open`.
+The log, `~/cinnamon-cans/cinnamon-can.log`, records every `seal` and `open`
+(`label` leaves it as it is).
 
 ## Contributing
 

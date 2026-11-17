@@ -509,7 +509,7 @@ resolve_can() {
     die "Can file not found: $what"
 }
 
-# A label is one short line of text you give a can (seal -L).
+# A label is one short line of text you give a can (seal -L, label).
 LABEL_MAX=40
 
 # clean_label TEXT -> sets LABEL to TEXT as one line (tabs and line breaks

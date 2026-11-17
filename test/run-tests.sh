@@ -17,7 +17,7 @@
 # (also with a broken "cinnamon"), seal / list / peek / diff, cans with a
 # broken manifest, the diff columns and their order, which item owns
 # which setting and which file, what is excluded, ignored and never kept,
-# long labels and names.
+# long labels and names, label.
 #
 # NOT covered -- follow the Testing rules in AGENTS.md instead: really
 # applying a can ("open" + yes), sudo, language, system files, the real
@@ -482,6 +482,38 @@ if command -v script >/dev/null 2>&1; then
 else
     printf '  skip "script" is missing: what only shows in a terminal is not tried\n'
 fi
+
+
+section "label"
+# Cans of their own, so the cans of the other tests stay as they are.
+U="$TMP/unpack-manage"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+pack "$U" TAG2 10
+TAG="$TMP/cans/manual-TAG2-20300101T000010+0000.tar.gz.canned"
+# inside CAN -> every file in the can but the manifest, with its
+#   permissions, owner, size and time.
+inside() { tar -tvzf "$1" | grep -v ' \./manifest\.txt$' | sort; }
+before="$(inside "$TAG")"
+run s out "$CC" -c "$CONF" label TAG2 "ก่อนอัปเกรด new label"
+check "label: exit 0"                                  [ "$s" -eq 0 ]
+check "label shows the old label and the new one"      sh -c 'printf "%s" "$1" | grep -qF "         └ Was: test can" && printf "%s" "$1" | grep -qF "         └ Now: ก่อนอัปเกรด new label"' sh "$out"
+check "... the can keeps its file name"                [ -f "$TAG" ]
+check "... and everything else in it, exactly"         [ "$(inside "$TAG")" = "$before" ]
+run s out "$CC" -c "$CONF" peek TAG2
+check "peek shows the new label"                       has "$out" "         └ Label: ก่อนอัปเกรด new label"
+run s out "$CC" -c "$CONF" label tag2 "ก่อนอัปเกรด new label"
+check "the same label again: exit 0, nothing changed"  sh -c '[ "$1" -eq 0 ] && printf "%s" "$2" | grep -qF "already has this label; nothing was changed."' sh "$s" "$out"
+run s out "$CC" -c "$CONF" label TAG2 ""
+check "an empty label removes it"                      has "$out" "         └ Now: (none)"
+run s out "$CC" -c "$CONF" label TAG2 "$L40"
+check "a label of 40 Thai letters is taken"            [ "$s" -eq 0 ]
+run s out "$CC" -c "$CONF" label TAG2 "${L40}x"
+check "41 characters: exit 1"                          [ "$s" -eq 1 ]
+run s out "$CC" -c "$CONF" peek TAG2
+check "... and the can keeps its label"                has "$out" "         └ Label: $L40"
+run s out "$CC" -c "$CONF" label GRB2 "x"
+check "label of a damaged can: exit 1, says why"       sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "damaged"' sh "$s" "$out"
+run s out "$CC" -c "$CONF" label TAG2
+check "label without a text: exit 1, how to use it"    sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "Usage: cinnamon-can label CAN TEXT"' sh "$s" "$out"
 
 
 section "what a can must NOT hold (hardware and personal are off)"

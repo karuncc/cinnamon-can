@@ -10,7 +10,8 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
 - `seal [-L TEXT]` makes a can, `list` shows cans, `peek CAN` shows what is
   inside, `diff CAN [CAN2]` compares, `open CAN` makes the computer match a
   can (shows the diff, asks for `yes`, saves an "autocan" first, then
-  asks whether to restart the computer).
+  asks whether to restart the computer), `label CAN TEXT` gives a can
+  another label.
 - Goal: after `open` on another computer, the desktop looks, is arranged
   and feels (mouse, keyboard) exactly the same, except for apps that are
   installed differently. Personal things and pure hardware (screens,
@@ -60,6 +61,7 @@ lib/list.sh           list, peek, reading cans and manifests
 lib/diff.sh           views, comparison, the diff report
 lib/seal.sh           seal, package_can
 lib/open.sh           open: confirm, autocan, apply, log, restart
+lib/manage.sh         label (swaps only the manifest)
 test/run-tests.sh     the test script (safe to run on this computer)
 config/example.conf   the documented example config (the only tracked one)
 README.md             the user guide
@@ -133,7 +135,7 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   (`on_ctrl_c`: "Cancelled; nothing was changed."). A command sets
   `CC_CANCEL_NOTE` when stopping means more than that (`seal`), and
   switches Ctrl+C off (`trap '' INT`) while it writes something that must
-  not be left half done (`open`).
+  not be left half done (`open`, and the last step of `label`).
 - A command for the user to type is a message line that starts with
   `$ `: it gets a grey `$` in the left column and can be copied as it is.
   Can IDs go through `show_id` (grey block, or `[ID]`), but never inside
@@ -175,6 +177,8 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   answer `yes` to `open` on the real machine** unless the owner asks for it;
   then seal a safety can first, put a `systemctl` shim in `PATH` so the
   machine does not restart under you, and end on the safety can.
+- Never run `label` on the owner's cans: try it with a config whose
+  `backup_dir` is a folder of test cans.
 - `sudo` does not search `~/.local/bin`: messages and docs must show the
   full path of the program for `sudo ... open`.
 - Real writes are tested in a sandbox: `dbus-run-session` with a fake
