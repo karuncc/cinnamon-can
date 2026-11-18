@@ -764,7 +764,8 @@ printf '%s\n' \
     "$HOME/.config/enchant/en.dic" \
     "$HOME/.config/autostart/nvidia-prime.desktop" \
     "$HOME/.config/autostart/something-else.desktop" \
-    "$HOME/.config/monitors.xml" > "$TMP/fake-files.txt"
+    "$HOME/.config/monitors.xml" \
+    "$HOME/.config/fcitx/addon/fcitx-clipboard.conf" > "$TMP/fake-files.txt"
 own="$(awk -f "$ROOT/lib/files.awk" "$TMP/pat-files.txt" "$TMP/fake-files.txt")"
 check "bookmarks belong to nemo, not appearance"  has "$own" "nemo$TAB$HOME/.config/gtk-3.0/bookmarks"
 check "gtk settings belong to appearance"         has "$own" "appearance$TAB$HOME/.config/gtk-3.0/settings.ini"
@@ -772,6 +773,7 @@ check "dictionary words belong to personal"       has "$own" "personal$TAB$HOME/
 check "nvidia autostart belongs to hardware"      has "$own" "hardware$TAB$HOME/.config/autostart/nvidia-prime.desktop"
 check "other autostart belongs to default-apps"   has "$own" "default-apps$TAB$HOME/.config/autostart/something-else.desktop"
 check "monitor layout belongs to hardware"        has "$own" "hardware$TAB$HOME/.config/monitors.xml"
+check "fcitx add-ons switched on/off belong to keyboard" has "$own" "keyboard$TAB$HOME/.config/fcitx/addon/fcitx-clipboard.conf"
 
 
 section "what programs write by themselves (the built-in items' ignore lines)"
@@ -802,6 +804,11 @@ window-width=790
 size=(650, 500)
 [org/x/editor/state/history-entry]
 history-search-for=['secret']
+[org/x/editor/plugins/filebrowser/on-load]
+root='file:///'
+virtual-root='file:///tmp'
+tree-view=true
+enable-remote=true
 [org/gnome/evolution-data-server]
 migrated=true
 [org/gnome/terminal/legacy]
@@ -834,6 +841,9 @@ for p in /org/nemo/window-state/geometry /org/gnome/libgnomekbd/preview/x \
          /desktop/ibus/general/version /desktop/ibus/panel/x \
          /org/gtk/settings/file-chooser/window-size /org/gtk/settings/file-chooser/last-folder-uri \
          /com/linuxmint/updates/window-width /org/x/editor/state/window/size \
+         /org/x/editor/plugins/filebrowser/on-load/root \
+         /org/x/editor/plugins/filebrowser/on-load/virtual-root \
+         /org/x/editor/plugins/filebrowser/on-load/tree-view \
          /org/gnome/evolution-data-server/migrated /org/gnome/terminal/legacy/schema-version \
          /io/github/celluloid-player/celluloid/window-state/width; do
     check "noise is ignored: $p" ignored "$p"
@@ -842,6 +852,7 @@ for p in /org/nemo/window-state/side-pane-view /desktop/ibus/general/preload-eng
          /desktop/ibus/panel/show-icon-on-systray /org/gtk/settings/file-chooser/show-hidden \
          /io/github/celluloid-player/celluloid/last-folder-enable \
          /io/github/celluloid-player/celluloid/window-state/volume \
+         /org/x/editor/plugins/filebrowser/on-load/enable-remote \
          /org/cinnamon/window-effect-speed /org/cinnamon/desktop/keybindings/media-keys/window-screenshot; do
     check "a choice still counts: $p" counted "$p"
 done
