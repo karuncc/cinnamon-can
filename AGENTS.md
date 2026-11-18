@@ -28,12 +28,16 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
 - `set -euo pipefail` is on: a pipeline whose first part can fail (e.g.
   `find` on a missing folder) needs `|| true`, or the program stops
   silently.
-- Two bash traps that have already bitten this project: with `set -e`, an
-  assignment `x="$(command)"` stops the whole program when the command
-  fails (add `|| true` when that is not meant); and `IFS=$'\t' read`
-  treats tab characters next to each other as ONE separator, so an empty
-  middle column shifts all later columns (write a placeholder such as
-  `(default)` instead of leaving a column empty).
+- Three bash traps that have already bitten this project: with `set -e`,
+  an assignment `x="$(command)"` stops the whole program when the command
+  fails (add `|| true` when that is not meant); `IFS=$'\t' read` treats
+  tab characters next to each other as ONE separator, so an empty middle
+  column shifts all later columns (write a placeholder such as
+  `(default)` instead of leaving a column empty); and with `pipefail`, a
+  pipe into `grep -q` (or `head`) can fail on long input: it stops reading
+  at the first match, the command before it is cut off, and the pipe
+  counts as failed (search a variable with `[[ $x == *text* ]]` or
+  `grep -q ... <<< "$x"` instead).
 - sudo is only used by `sudo cinnamon-can open CAN`. The program then
   re-runs itself as the real user (`CC_SYSTEM_RESTORE=1`) and calls `sudo`
   only to write system files. Never run anything else as root.

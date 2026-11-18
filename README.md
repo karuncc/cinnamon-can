@@ -36,8 +36,9 @@ Every comparison warns you when the versions differ.
 running as root (only `open` may be run with sudo, see below).
 
 **Not what it is:**
-- not a full backup — use Timeshift for the system and a backup tool for
-  your documents;
+- not a full backup — use Timeshift for the system, and Mint's Backup Tool
+  for your documents (it can also save your list of apps and install them
+  again);
 - not an installer — it lists the apps you installed and shows the commands
   to install the missing ones, but never runs them;
 - **not encrypted** — a can holds your settings and some files in plain
@@ -282,7 +283,9 @@ How to read it:
   installed on this computer`, or a warning that lists the themes, fonts,
   apps and packages the can names but this computer lacks, with the item
   that uses each one (the item whose settings or files name it). They are
-  never installed for you.
+  never installed for you. The list itself is not compared: an app
+  installed since the can was made is not a difference, and one removed
+  since then shows only in this warning. `peek` shows the list a can holds.
 - The dots of the summary: green when nothing differs, yellow when
   something does (system changes too), red for what is missing here.
 
@@ -523,17 +526,23 @@ built-in file is a good start).
 1. Update both computers until they run the same Mint release and the same
    Cinnamon version (`cinnamon --version`).
 2. Old computer: `cinnamon-can seal -L "Move"`, then copy the can (from
-   `~/cinnamon-cans/`) to the new computer's `~/cinnamon-cans/`.
-3. New computer: get cinnamon-can, create the config, then
-   `cinnamon-can diff ID` and install what it lists as not installed (apps,
-   fonts, themes) — their settings then apply right away.
+   `~/cinnamon-cans/`) to the new computer's `~/cinnamon-cans/`. Save your
+   documents and your list of apps with Mint's Backup Tool too.
+3. New computer: first put your documents and apps back with the Backup
+   Tool. Then get cinnamon-can, create the config, run
+   `cinnamon-can diff ID` and install what it still lists as not installed
+   (apps, fonts, themes) — their settings then apply right away.
 4. `cinnamon-can open ID` — with sudo and the full path (see "Open a can")
    to include the system files. Type `yes` when it asks to restart.
 5. Things cinnamon-can does not handle: printers, Wi-Fi and VPN
    connections (with their passwords), Bluetooth pairing, online accounts,
    browser data, SSH/GPG keys, user groups, firewall, drivers. A Web
    App's launcher comes along, but its browser profile does not (it holds
-   logins): make the Web App again on the new computer.
+   logins): make the Web App again on the new computer. Settings that an
+   app keeps in its own files instead of the settings database are not
+   kept either (every Flatpak app keeps them in `~/.var/app/`): write your
+   own item for them, and leave out files that hold the app's ID, keys or
+   passwords.
 
 ## Configuration
 
@@ -581,7 +590,11 @@ A can is a `.tar.gz` file with this inside:
 | `items/ITEM/*.txt` | wallpaper name, language, time zone, software list, crontab |
 
 The log, `~/cinnamon-cans/cinnamon-can.log`, records every `seal` and `open`
-(`label` and `delete` leave it as it is).
+(`label` and `delete` leave it as it is). Deleting it loses only what it
+remembers: the "Latest applied" line of `list`, the warning `delete` gives
+before it deletes the way back from the latest `open`, and which IDs were
+used (the ID of a deleted can may then be given again). The cans and
+autocans stay as they are; a new log starts with the next `seal` or `open`.
 
 ## Contributing
 
