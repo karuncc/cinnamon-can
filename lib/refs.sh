@@ -119,7 +119,7 @@ check_refs() {
         true
     } | while IFS=$'\t' read -r v x; do
         [ -n "$v" ] && [ "$v" != "C" ] && [ "$v" != "POSIX" ] || continue
-        grep -qx "$(printf '%s\n' "$v" | norm_locale)" "$have_locales" || printf 'locale\t%s\t%s\n' "$v" "$x"
+        grep -qxF -- "$(printf '%s\n' "$v" | norm_locale)" "$have_locales" || printf 'locale\t%s\t%s\n' "$v" "$x"
     done | sort -u -t$'\t' -k2,2
 
     # --- Sound theme ---
@@ -135,12 +135,15 @@ check_refs() {
         local installed="$CC_TMP/refs-dpkg.txt" flatpaks="$CC_TMP/refs-flatpak.txt"
         dpkg-query -W -f='${Package} ${Status}\n' 2>/dev/null | awk '$NF == "installed" { print $1 }' | sort -u > "$installed"
         { flatpak list --app --columns=application 2>/dev/null || true; } | sort -u > "$flatpaks"
+        # The names come from the can: they are looked up as plain text
+        # (grep -F), never as a pattern, where "." would match any letter
+        # and a "[" would make grep stop with an error on the screen.
         { software_section "$f" apps; software_section "$f" language-support; } | while IFS= read -r x; do
-            grep -qx "$x" "$installed" || printf 'apt\t%s\t%s\n' "$x" "$where"
+            grep -qxF -- "$x" "$installed" || printf 'apt\t%s\t%s\n' "$x" "$where"
         done
         software_section "$f" flatpak | while IFS=$'\t' read -r x v; do
             x="${x%% *}"; [ -n "$x" ] || continue
-            grep -qx "$x" "$flatpaks" || printf 'flatpak\t%s\t%s\t%s\n' "$x" "$where" "${v:-flathub}"
+            grep -qxF -- "$x" "$flatpaks" || printf 'flatpak\t%s\t%s\t%s\n' "$x" "$where" "${v:-flathub}"
         done
         software_section "$f" local-programs | while IFS= read -r x; do
             [ -e "$x" ] || printf 'program\t%s\t%s\n' "$x" "$where"

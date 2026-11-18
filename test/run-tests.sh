@@ -518,7 +518,7 @@ echo "cc${E}[2Kline${CSI}31m" >> "$F"
 mkdir -p "$U/items/sound/home/.config"
 echo hello > "$U/items/sound/home/.config/cc${E}[2Kname.txt"
 SW="$(find "$U/items" -name software.txt | head -n 1)"
-[ -z "$SW" ] || printf '[apps]\ncc-ctl%s[2Kpkg\nx; rm -rf ~\n' "$E" > "$SW"
+[ -z "$SW" ] || printf '[apps]\ncc-ctl%s[2Kpkg\nx; rm -rf ~\nb.sh\n' "$E" > "$SW"
 ( cd "$U" && tar -czf "$TMP/cans/manual-CTX2-20300101T000031+0000.tar.gz.canned" . )
 run s out "$CC" -c "$CONF" list
 check "list: no control character from a can reaches the screen" noctl "$out"
@@ -536,6 +536,8 @@ check "open: none either"                                     noctl "$out"
 if [ -n "$SW" ]; then
     check "... a software name shows them as plain letters"   has "$out" "cc-ctl^[[2Kpkg"
     check "... a package name in the command to copy stays one word" has "$out" "'x; rm -rf ~'"
+    check "... a name with a [ in it gives no grep error"       hasnt "$out" "grep:"
+    check "... a name is looked up as text: b.sh is not bash"  sh -c 'printf "%s\n" "$1" | grep -qE "└ apt +b\.sh +"' sh "$out"
 else
     printf '  skip the can has no software list\n'
 fi

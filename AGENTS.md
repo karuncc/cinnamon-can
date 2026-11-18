@@ -153,7 +153,9 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   everything else from a can (setting names and values, file names and
   lines, software names) is shown with them written as plain letters,
   `^[` for ESC: `to_visible`/`visible` in bash, `vis()` in awk (put
-  `"$CTRL_AWK"` in front of the program). `shell_word` does it too.
+  `"$CTRL_AWK"` in front of the program). `shell_word` does it too. A
+  name from a can is looked up as plain text (`grep -F --`), never as a
+  pattern.
 - Sentences start with a capital letter, labels the program writes too.
 - `warn` and `err` go to stderr; a warning that is part of a report
   (`diff`, `seal`, `list`, the summary of `open`) uses
