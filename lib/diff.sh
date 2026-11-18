@@ -475,19 +475,6 @@ without_ignored() {
 # Showing the result
 # ---------------------------------------------------------------------------
 
-# show_path KIND REL -> how a path is shown: ~/..., /etc/..., crontab
-#   (a file name may come from a can: see to_visible)
-show_path() {
-    local p
-    to_visible p "$2"
-    case "$p" in
-        home/*)      printf '~/%s' "${p#home/}" ;;
-        root/*)      printf '/%s' "${p#root/}" ;;
-        crontab.txt) printf 'crontab' ;;
-        *)           printf '%s' "$p" ;;
-    esac
-}
-
 # The report shows each item as a heading, and under it one entry per
 # setting or file that differs (a file with a yellow dot):
 #

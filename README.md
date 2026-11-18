@@ -152,10 +152,13 @@ cinnamon-can peek K7Q2
 ```
 
 Shows when and on which computer and versions the can was made, the same
-table of items as `seal`, and the list of software you had installed
-(`(none)` where a kind is empty). It shows only the can: what differs
-from this computer (other versions, and what the can uses that is not
-installed here) is shown by `diff`.
+table of items as `seal`, every file the can holds (under the item it is
+in), and the list of software you had installed (`(none)` where a kind is
+empty). An item that this computer switches off (in your config, or off
+by default) is marked `(switched off here)`: `diff` and `open` leave it
+alone. It shows only the can: what differs from this computer (other
+versions, and what the can uses that is not installed here) is shown by
+`diff`.
 
 ### Compare
 

@@ -90,24 +90,49 @@ can_header() {
 
 # summarize_tree TEXT TREE -> TEXT, then one row per item: how many
 #   settings and files it holds, and what else (EXTRAS: the wallpaper,
-#   the language, the time zone, the software list, the crontab).
+#   the language, the time zone, the software list, the crontab). An item
+#   switched off on this computer (item_on: by the config, or by its
+#   default) is marked so in grey: "diff" and "open" leave it alone.
 summarize_tree() {
-    local tree="$2" n d settings files extra
+    local tree="$2" n d settings files extra off=0
     info "$1"
     table_head 16 "ITEM" -8 "SETTINGS" -6 "FILES" 0 "EXTRAS"
     while IFS= read -r n; do
         d="$tree/items/$n"
         settings=0; files=0; extra=""
         [ -f "$d/dconf.ini" ] && settings="$(ini_flat "$d/dconf.ini" | wc -l)"
-        files="$( { find "$d/home" "$d/root" \( -type f -o -type l \) 2>/dev/null || true; } | wc -l)"
+        files="$(tree_files "$d" | wc -l)"
         [ -d "$d/wallpaper" ] && extra="$extra; wallpaper $(basename "$(cat "$d/wallpaper.txt" 2>/dev/null)")"
         [ -f "$d/language.txt" ] && extra="$extra; $(language_words "$d/language.txt")"
         [ -f "$d/timezone.txt" ] && extra="$extra; time zone $(cat "$d/timezone.txt")"
         [ -f "$d/crontab.txt" ] && extra="$extra; crontab"
         [ -f "$d/software.txt" ] && extra="$extra; $(software_counts "$d/software.txt")"
         to_visible extra "${extra#; }"      # (names from the can)
+        if ! item_on "$n"; then
+            off=1; extra="${C_GREY}(switched off here)${C_RESET}${extra:+ $extra}"
+        fi
         printf '%s%s %8s %6s %s\n' "$ROW" "$(item_cell "$n" 16)" "$settings" "$files" "$extra"
     done < <(tree_items "$tree")
+    [ "$off" -eq 0 ] || say "Items switched off here are left alone by diff and open (see $(conf_name 72))."
+}
+
+# tree_files ITEM_DIR -> the home and system files of one item of a tree,
+#   as paths inside the item (home/..., root/...), sorted.
+tree_files() {
+    ( cd "$1" 2>/dev/null && { find home root \( -type f -o -type l \) 2>/dev/null || true; } ) | LC_ALL=C sort
+}
+
+# list_files TREE -> every file the tree holds, under the item it is in
+#   (as ~/... and /...). The wallpaper and the crontab are in the table.
+list_files() {
+    local tree="$1" n f rows=()
+    while IFS= read -r n; do
+        local item_rows=()
+        while IFS= read -r f; do item_rows+=("${SUB2}$(show_path file "$f")"); done < <(tree_files "$tree/items/$n")
+        [ "${#item_rows[@]}" -eq 0 ] || rows+=("${SUB}$(item_dot "$n")$n" "${item_rows[@]}")
+    done < <(tree_items "$tree")
+    if [ "${#rows[@]}" -eq 0 ]; then info "Files in the can: none"
+    else info "Files in the can:" "${rows[@]}"; fi
 }
 
 # language_words FILE -> "language th_TH, formats en_US.UTF-8" from the
@@ -257,5 +282,7 @@ cmd_peek() {
     can_header "Peeking into the can $(show_id "${MAN[can.id]}") ..."
     say ""
     summarize_tree "Items in the can:" "$tree"
+    say ""
+    list_files "$tree"
     show_software "$tree"
 }

@@ -155,6 +155,21 @@ check "list shows the label"    has "$out" "test can"
 run s out "$CC" -c "$CONF" peek "$BASEID"
 check "peek: exit 0"            [ "$s" -eq 0 ]
 check "peek lists the items"    has "$out" "keyboard"
+# The files of the can, each under the item it is in.
+PF="$(tar -tzf "$BASE" | sed -n 's|^\./items/\([^/]*\)/home/\(.*[^/]\)$|\1 \2|p' | head -n 1)"
+if [ -n "$PF" ]; then
+    check "peek lists the files of the can"         has "$out" "           └ ~/${PF#* }"
+    check "... under the item they are in"          sh -c 'printf "%s\n" "$1" | awk -v i="         └ $2" -v f="           └ ~/$3" "\$0 == i { under = 1; next } /^         └ / { under = 0 } under && \$0 == f { ok = 1 } END { exit !ok }"' sh "$out" "${PF%% *}" "${PF#* }"
+else
+    printf '  skip the can has no home files\n'
+fi
+check "... with nothing switched off: no note about it" hasnt "$out" "switched off here"
+# An item the can has but this computer switches off: marked in the table.
+PN="$(tar -tzf "$BASE" | sed -n 's|^\./items/\([^/]*\)/.*|\1|p' | sort -u | head -n 1)"
+printf '[general]\nbackup_dir = %s\n\n[items]\n%s = no\n' "$TMP/cans" "$PN" > "$TMP/off.conf"
+run s out "$CC" -c "$TMP/off.conf" peek "$BASEID"
+check "peek marks an item switched off here"    sh -c 'printf "%s\n" "$1" | grep -qE "^         └ $2 +[0-9]+ +[0-9]+ \(switched off here\)"' sh "$out" "$PN"
+check "... and says what that means"            has "$out" "Items switched off here are left alone by diff and open"
 run s out "$CC" -c "$CONF" peek "$(printf '%s' "$BASEID" | tr '[:upper:]' '[:lower:]')"
 check "an ID may be typed in lower case" [ "$s" -eq 0 ]
 
