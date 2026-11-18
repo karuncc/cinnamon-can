@@ -114,9 +114,11 @@ so it looks the same whoever opens it, a person or an AI tool.
   line, as in a commit. Nothing else: no headings, checklists or test
   output.
 - **Merging:** on GitHub, as a merge commit or a squash — never a
-  rebase. Keep the message GitHub proposes (for a merge commit "Merge
-  pull request #N from owner/branch" with the title below it): it is the
-  same whoever merges. Then delete the branch.
+  rebase. A branch with several commits, one per step, is merged with a
+  merge commit, so every step stays in the history. Keep the message
+  GitHub proposes (for a merge commit "Merge pull request #N from
+  owner/branch" with the title below it): it is the same whoever merges.
+  Then delete the branch.
 
 Example:
 
