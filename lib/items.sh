@@ -79,12 +79,31 @@ load_items() {
 
 # item_problem TEXT [LINES] -> notes a problem of the item file being read
 #   ($file in load_item_file), to be shown with all the others at the end.
+#   The text quotes the file, which may come from a can: its control
+#   characters are written as plain letters (see to_visible).
 ITEM_PROBLEMS=()          # file<TAB>problem, in the order found
 item_problem() {
-    local where=""
+    local where="" text
     [ -z "${2:-}" ] || where="L$2: "
-    ITEM_PROBLEMS+=("$(rel_path "$file")"$'\t'"$where$1")
+    to_visible text "$where$1"
+    ITEM_PROBLEMS+=("$(item_file_name "$file")"$'\t'"$text")
     bad=1
+}
+
+# item_file_name FILE -> how messages name an item file: from the
+#   program's folder (items/sound.item, config/items/my.item), or, for an
+#   item file a can brings along (unpacked in the temporary folder, which
+#   is gone once the program ends), its place inside the can:
+#   "catalog/user/my.item in the can [K7Q2]".
+item_file_name() {
+    local f="$1" shown
+    if [ -n "${CC_TMP:-}" ] && [[ "$f" == "$CC_TMP"/*/catalog/* ]]; then
+        to_visible shown "catalog/${f##*/catalog/}"
+        printf '%s in the can %s' "$shown" "$(show_id "${MAN[can.id]:-?}")"
+    else
+        to_visible shown "$(rel_path "$f")"
+        printf '%s' "$shown"
+    fi
 }
 
 # show_item_problems -> one error listing every problem, file by file:
@@ -110,7 +129,7 @@ load_item_file() {
         item_problem "An item name may only use a-z, 0-9 and \"-\""; return 1
     fi
     if [ -n "${ITEM_SRC[$name]+set}" ]; then
-        item_problem "An item called \"$name\" already exists ($(rel_path "${ITEM_FILE[$name]}")); please use another name"
+        item_problem "An item called \"$name\" already exists ($(item_file_name "${ITEM_FILE[$name]}")); please use another name"
         return 1
     fi
     ITEM_NAMES+=("$name")

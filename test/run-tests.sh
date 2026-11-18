@@ -572,6 +572,17 @@ run s out "$CC" -c "$CONF" peek CTX2 sound
 check "peek CAN ITEM: none either"                            noctl "$out"
 check "... a setting's value as plain letters"              has "$out" "'red^[[31mtext^Mx'"
 check "... and a file name"                                  has "$out" "~/.config/cc^[[2Kname.txt"
+# A can that brings an item file with a mistake: the error quotes the
+# file, and names it by its place in the can (not the temporary folder).
+U="$TMP/unpack-baditem"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+sed -i 's/^id[[:space:]]*=.*/id = BDX2/' "$U/manifest.txt"
+printf 'description = An item with a mistake\ndefault = on%s[2Kx\n' "$E" > "$U/catalog/user/cc-bad.item"
+( cd "$U" && tar -czf "$TMP/cans/manual-BDX2-20300101T000041+0000.tar.gz.canned" . )
+run s out "$CC" -c "$CONF" peek BDX2
+check "a broken item file in a can: exit 1, and says so"     sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "Invalid item file(s) detected:"' sh "$s" "$out"
+check "... no control character from it reaches the screen"     noctl "$out"
+check "... its bad value shows them as plain letters"       has "$out" 'not "on^[[2Kx"'
+check "... and names the file by its place in the can"        has "$out" "         └ • catalog/user/cc-bad.item in the can [BDX2]"
 
 
 section "Ctrl+C"
