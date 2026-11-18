@@ -160,6 +160,38 @@ alone. It shows only the can: what differs from this computer (other
 versions, and what the can uses that is not installed here) is shown by
 `diff`.
 
+```
+cinnamon-can peek K7Q2 keyboard
+```
+
+```
+   INFO  Peeking into the can [K7Q2] ...
+         └ Label: Before upgrade
+         └ When:  2026-11-13 14:30:00 +07:00
+         └ On:    mylaptop (Linux Mint 22.3, Cinnamon 6.6.9, x86_64)
+
+   INFO  Item keyboard: Keyboard layouts, all shortcuts, repeat speed, input method
+         └ 64 settings, 16 files
+
+         Settings
+         └ /org/cinnamon/desktop/input-sources/sources
+           [('xkb', 'us'), ('xkb', 'th')]
+         └ /org/cinnamon/desktop/keybindings/wm/close
+           ['<Super>q']
+
+         Files
+         └ • ~/.xinputrc  (3 lines)
+       1   # im-config(8) generated on Fri, 13 Nov 2026 14:00:00 +0700
+       2   run_im fcitx
+       3   # im-config signature: 0123456789abcdef0123456789abcdef  -
+```
+
+With the name of an item, `peek` shows that item in full: every setting
+with its value under it, and every file with its text and line numbers
+(a binary file or the wallpaper image only with its size), the way
+`diff` shows them. A big item is long: add `| less` to read it page by
+page. `peek` without an item ends with this command for its first item.
+
 ### Compare
 
 ```

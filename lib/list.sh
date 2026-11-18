@@ -267,22 +267,118 @@ log_field() { printf '%s\n' "$1" | tr ' ' '\n' | sed -n "s/^$2=//p" | tr -d '"' 
 # peek
 # ---------------------------------------------------------------------------
 
+#   cinnamon-can peek CAN          what the can holds: items, files, software
+#   cinnamon-can peek CAN ITEM     one item in full: every setting with its
+#                                  value, and every file with its text
 cmd_peek() {
-    [ $# -eq 1 ] || die "Usage: cinnamon-can peek CAN"
-    local can tree
+    [ $# -ge 1 ] && [ $# -le 2 ] || die "Usage: cinnamon-can peek CAN [ITEM]"
+    local can tree first
     can="$(resolve_can "$1")" || exit 1
     make_tmpdir
     tree="$CC_TMP/can"
     open_can "$can" "$tree"
     load_items "$tree/catalog/builtin" "$tree/catalog/user"
+    # (an item the can does not have stops here, before anything is shown)
+    [ $# -eq 1 ] || item_in_tree "$tree" "$2"
 
     # Only what the can holds. What differs from this computer (versions,
     # software and themes not installed here) is shown by "diff CAN".
     say ""
     can_header "Peeking into the can $(show_id "${MAN[can.id]}") ..."
+    if [ $# -eq 2 ]; then peek_item "$tree" "$2"; return 0; fi
     say ""
     summarize_tree "Items in the can:" "$tree"
     say ""
     list_files "$tree"
     show_software "$tree"
+    first="$(tree_items "$tree" | head -n 1)"
+    [ -n "$first" ] || return 0
+    say ""
+    say "To see one item in full, run:"
+    say "\$ cinnamon-can$(config_option) peek $(can_ref "$can" "${MAN[can.id]}") $first"
+}
+
+# item_in_tree TREE ITEM -> stops, naming the items it has, when the can
+#   unpacked in TREE has no item ITEM.
+item_in_tree() {
+    local n names=""
+    while IFS= read -r n; do
+        [ "$n" != "$2" ] || return 0
+        names="$names, $n"
+    done < <(tree_items "$1")
+    die "The can $(show_id "${MAN[can.id]}") has no item \"$(visible "$2")\"" "Its items: ${names#, }"
+}
+
+# peek_item TREE ITEM -> one item of the can in full: its settings (with
+#   the language and the time zone), each with its value under it, as
+#   "diff" shows them; then its files, each with its text and line numbers
+#   (a binary file, the wallpaper image: only its size; a link: where it
+#   points); then the software list, when the item keeps it.
+peek_item() {
+    local tree="$1" n="$2" d="$1/items/$2" more=() desc settings files f p value counts
+    local rows="$CC_TMP/item-settings.txt"
+    to_visible desc "${ITEM_DESC[$n]:-}"
+    # Every setting, one per line: path<TAB>value (the names "diff" uses
+    # for the language and the time zone, too).
+    {
+        [ ! -f "$d/dconf.ini" ] || ini_flat "$d/dconf.ini"
+        [ ! -f "$d/language.txt" ] || awk -F= 'NF { print "(language) " $1 "\t" substr($0, index($0, "=") + 1) }' "$d/language.txt"
+        [ ! -f "$d/timezone.txt" ] || printf '(time zone)\t%s\n' "$(cat "$d/timezone.txt")"
+    } > "$rows"
+    settings="$(wc -l < "$rows")"
+    files="$(tree_files "$d" | wc -l)"
+    counts="$(counted "$settings" setting), $(counted "$files" file)"
+    [ ! -d "$d/wallpaper" ] || counts="$counts, the wallpaper"
+    [ ! -f "$d/crontab.txt" ] || counts="$counts, the crontab"
+    [ ! -f "$d/software.txt" ] || counts="$counts, the software list"
+    more+=("${SUB}$counts")
+    item_on "$n" || more+=("${SUB}${C_GREY}Switched off here: diff and open leave it alone${C_RESET}")
+    say ""
+    info "Item $(item_dot "$n")$n: $desc" "${more[@]}"
+
+    if [ "$settings" -gt 0 ]; then
+        say ""
+        say "${C_BOLD}Settings${C_RESET}"
+        while IFS=$'\t' read -r p value; do
+            to_visible p "$p"
+            say "${SUB}$p"
+            printf '           %s\n' "$(value_word "$value")"
+        done < "$rows"
+    fi
+
+    if [ "$files" -gt 0 ] || [ -f "$d/crontab.txt" ] || [ -d "$d/wallpaper" ]; then
+        say ""
+        say "${C_BOLD}Files${C_RESET}"
+        while IFS= read -r f; do show_one_file "$d/$f" "$(show_path file "$f")"; done < <(tree_files "$d")
+        [ ! -f "$d/crontab.txt" ] || show_one_file "$d/crontab.txt" "crontab"
+        if [ -d "$d/wallpaper" ]; then
+            for f in "$d"/wallpaper/*; do
+                [ -f "$f" ] || continue
+                say "${SUB}wallpaper $(visible "$(basename "$f")")  ${C_GREY}(image, $(human_size "$(stat -c %s "$f")"))${C_RESET}"
+            done
+        fi
+    fi
+    [ ! -f "$d/software.txt" ] || show_software "$tree"
+}
+
+# show_one_file FILE LABEL -> one file of an item, as peek_item shows it:
+#   a text file with its lines (numbered, in grey, like "diff"), a link
+#   with where it points, anything else with its size only.
+show_one_file() {
+    local f="$1" label="$2" lines
+    if [ -L "$f" ]; then
+        say "${SUB}$(file_dot "$label")"
+        printf '           link to %s\n' "$(visible "$(readlink "$f")")"
+    elif [ ! -s "$f" ]; then
+        say "${SUB}$label  ${C_GREY}(empty)${C_RESET}"
+    elif is_text "$f"; then
+        lines="$(awk 'END { print NR }' "$f")"
+        say "${SUB}$(file_dot "$label")  ${C_GREY}($(counted "$lines" line))${C_RESET}"
+        # (the lines come from the can: vis() writes control characters
+        # as plain letters, see CTRL_AWK in lib/common.sh)
+        awk -v grey="$C_GREY" -v off="$C_RESET" "$CTRL_AWK"'
+            { printf "    %s%4d%s   %s\n", grey, NR, off, vis($0) }' "$f"
+    else
+        say "${SUB}$label  ${C_GREY}(binary file, $(human_size "$(stat -c %s "$f")"))${C_RESET}"
+    fi
 }

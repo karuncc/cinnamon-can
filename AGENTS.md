@@ -7,8 +7,9 @@
 A small command-line tool that keeps a Linux Mint Cinnamon desktop in
 "cans" (snapshots) and puts it back:
 
-- `seal [-L TEXT]` makes a can, `list` shows cans, `peek CAN` shows what is
-  inside, `diff CAN [CAN2]` compares, `open CAN` makes the computer match a
+- `seal [-L TEXT]` makes a can, `list` shows cans, `peek CAN [ITEM]` shows
+  what is inside (one item in full: every setting and the text of every
+  file), `diff CAN [CAN2]` compares, `open CAN` makes the computer match a
   can (shows a summary of the changes, asks for `yes`, saves an "autocan"
   first, then asks whether to restart the computer), `label CAN TEXT`
   gives a can another label, `delete CAN...` deletes cans (asks for `yes`).
