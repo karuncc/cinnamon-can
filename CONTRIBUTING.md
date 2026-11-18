@@ -82,7 +82,8 @@ Assisted-by: <model name>
   obvious.
 - **Trailers:** never add `Co-Authored-By`. If an AI wrote most of the
   code in the commit, add `Assisted-by: <model name>` (the model actually
-  used) as the very last line, after a blank line. Otherwise no trailer.
+  used) as the very last line, after a blank line — also in a commit
+  without a body. Otherwise no trailer.
 
 Example:
 
@@ -112,7 +113,8 @@ so it looks the same whoever opens it, a person or an AI tool.
   what the whole branch changes, at an overview level. When an AI wrote
   most of the branch, end with `Assisted-by: <model name>` after a blank
   line, as in a commit. Nothing else: no headings, checklists or test
-  output.
+  output. For a branch with one commit, using that commit's summary and
+  body as the title and description is recommended.
 - **Merging:** on GitHub, as a merge commit or a squash — never a
   rebase. A branch with several commits, one per step, is merged with a
   merge commit, so every step stays in the history. Keep the message
