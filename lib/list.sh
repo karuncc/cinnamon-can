@@ -9,17 +9,20 @@
 declare -A MAN=()
 
 # read_manifest FILE -> fills MAN. (Labels may contain any text, so this
-#   reader does not treat "#" as a comment.)
+#   reader does not treat "#" as a comment. Control characters are left
+#   out of every value, so a can edited by hand cannot send orders to the
+#   terminal through its label or computer name.)
 read_manifest() {
     local section key value
     MAN=()
     while IFS=$'\t' read -r section key value; do
         MAN[$section.$key]="$value"
-    done < <(awk '
+    done < <(awk "$CTRL_AWK"'
         function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
         /^\[.*\]$/ { sec = substr($0, 2, length($0) - 2); next }
         /^[ \t]*(#|$)/ { next }
-        { eq = index($0, "="); if (eq) print sec "\t" trim(substr($0, 1, eq - 1)) "\t" trim(substr($0, eq + 1)) }' "$1")
+        # (control characters are left out: see CTRL_FROM in lib/common.sh)
+        { eq = index($0, "="); if (eq) print sec "\t" trim(substr($0, 1, eq - 1)) "\t" trim(novis(substr($0, eq + 1))) }' "$1")
 }
 
 # manifest_complete -> success when the manifest has every field a can
@@ -102,7 +105,8 @@ summarize_tree() {
         [ -f "$d/timezone.txt" ] && extra="$extra; time zone $(cat "$d/timezone.txt")"
         [ -f "$d/crontab.txt" ] && extra="$extra; crontab"
         [ -f "$d/software.txt" ] && extra="$extra; $(software_counts "$d/software.txt")"
-        printf '%s%s %8s %6s %s\n' "$ROW" "$(item_cell "$n" 16)" "$settings" "$files" "${extra#; }"
+        to_visible extra "${extra#; }"      # (names from the can)
+        printf '%s%s %8s %6s %s\n' "$ROW" "$(item_cell "$n" 16)" "$settings" "$files" "$extra"
     done < <(tree_items "$tree")
 }
 
@@ -148,9 +152,11 @@ show_software() {
 #   the words wrapped to the width of the screen; "(none)" in grey when
 #   there are no words, so it does not read like a name.
 software_row() {
+    local words
     printf '%s%-17s ' "$ROW" "$1"
     if [ -z "$2" ]; then printf '%s(none)%s\n' "$C_GREY" "$C_RESET"; return 0; fi
-    printf '%s\n' "$2" | awk -v room="$(( $(screen_width) - 29 ))" -v pad="$MSG_INDENT                    " '
+    to_visible words "$2"               # (names from the can)
+    printf '%s\n' "$words" | awk -v room="$(( $(screen_width) - 29 ))" -v pad="$MSG_INDENT                    " '
         { for (i = 1; i <= NF; i++) {
               if (used > 0 && used + 1 + length($i) > room) { printf "\n%s", pad; used = 0 }
               if (used > 0) { printf " "; used++ }
@@ -187,7 +193,7 @@ list_report() {
     start=" ${C_GREY}Latest:${C_RESET} $SUB"
     while IFS= read -r f; do
         if can_row "$start" "$f"; then start="$ROW"
-        else skipped+=("${SUB}$(file_dot "$(basename "$f")")" "${SUB2}$ROW_PROBLEM"); fi
+        else skipped+=("${SUB}$(file_dot "$(visible "$(basename "$f")")")" "${SUB2}$ROW_PROBLEM"); fi
     done < <(all_cans)
     # Files that are not readable cans are named after the table, not in it.
     # (On the normal output, so the warning stays in its place on the page.)

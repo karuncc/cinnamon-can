@@ -146,6 +146,14 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   elsewhere), and `config_option` repeats the `-c` the program was started
   with. Can IDs go through `show_id` (grey block, or `[ID]`), but never
   inside such a command.
+- Text that comes from a can never reaches the terminal as it is: a
+  control character in it would be an order to the terminal (erase a
+  line, change the colour). The fields of a manifest lose them when it is
+  read (`read_manifest`) and a new label when it is given (`clean_label`);
+  everything else from a can (setting names and values, file names and
+  lines, software names) is shown with them written as plain letters,
+  `^[` for ESC: `to_visible`/`visible` in bash, `vis()` in awk (put
+  `"$CTRL_AWK"` in front of the program). `shell_word` does it too.
 - Sentences start with a capital letter, labels the program writes too.
 - `warn` and `err` go to stderr; a warning that is part of a report
   (`diff`, `seal`, `list`, the summary of `open`) uses

@@ -273,9 +273,10 @@ show_left_out() {
     [ -s "$1" ] || return 0
     local lines=() l
     while IFS= read -r l; do lines+=("${SUB}$l"); done < <(
-        awk -F'\t' '!($1 in c) { order[++n] = $1 }
+        # (the item names are folder names inside the can: see CTRL_AWK)
+        awk -F'\t' "$CTRL_AWK"'!($1 in c) { order[++n] = $1 }
                     { c[$1]++ }
-                    END { for (i = 1; i <= n; i++) print order[i] ": " c[order[i]] " file(s)" }' "$1")
+                    END { for (i = 1; i <= n; i++) print vis(order[i]) ": " c[order[i]] " file(s)" }' "$1")
     msg_lines "$B_WARN" \
         "Not compared: $(wc -l < "$1") file(s) in can $(show_id "$2") that no item of can $(show_id "$3") takes:" \
         "${lines[@]}" "To see them, compare the other way round:" \
@@ -475,12 +476,15 @@ without_ignored() {
 # ---------------------------------------------------------------------------
 
 # show_path KIND REL -> how a path is shown: ~/..., /etc/..., crontab
+#   (a file name may come from a can: see to_visible)
 show_path() {
-    case "$2" in
-        home/*)      printf '~/%s' "${2#home/}" ;;
-        root/*)      printf '/%s' "${2#root/}" ;;
+    local p
+    to_visible p "$2"
+    case "$p" in
+        home/*)      printf '~/%s' "${p#home/}" ;;
+        root/*)      printf '/%s' "${p#root/}" ;;
         crontab.txt) printf 'crontab' ;;
-        *)           printf '%s' "$2" ;;
+        *)           printf '%s' "$p" ;;
     esac
 }
 
@@ -528,7 +532,7 @@ item_note() {
 # render_item ITEM -> the differences of one item: settings, then files.
 render_item() {
     local n="$1" result="$CC_TMP/item-result.txt" body="$CC_TMP/item-body.txt"
-    local it kind path state va vb a b label tag ma mb p m
+    local it kind path state va vb a b label tag ma mb p m shown
     # Settings first, then files, the crontab, and system files last.
     awk -F'\t' -v i="$n" '$1 == i {
         o = ($2 == "setting") ? 1 : ($2 == "file") ? 2 : ($2 == "crontab") ? 3 : 4
@@ -539,7 +543,8 @@ render_item() {
         tag=""
         [ "$kind" != "system" ] && [ "$path" != "(time zone)" ] || tag=" $B_SUDO"
         if [ "$kind" = "setting" ]; then
-            say "${SUB}$path$tag"
+            to_visible shown "$path"        # (setting names and values may come from a can)
+            say "${SUB}$shown$tag"
             change_line - "$(value_word "$va")"
             change_line + "$(value_word "$vb")"
             continue
@@ -552,8 +557,8 @@ render_item() {
             changed)
                 if [ -L "$a" ] || [ -L "$b" ]; then
                     say "${SUB}$label"
-                    change_line - "link to $(readlink "$a" 2>/dev/null || echo '(not a link)')"
-                    change_line + "link to $(readlink "$b" 2>/dev/null || echo '(not a link)')"
+                    change_line - "link to $(visible "$(readlink "$a" 2>/dev/null || echo '(not a link)')")"
+                    change_line + "link to $(visible "$(readlink "$b" 2>/dev/null || echo '(not a link)')")"
                 elif is_text "$a" && is_text "$b"; then
                     ma="" mb=""
                     if ignore_rules_for "$n" "$path" > "$CC_TMP/ignore-now.txt"; then
@@ -603,8 +608,10 @@ line_counts() {
 #   setting's value does (column 12). The MAPs turn a shown line number
 #   into the real one (when lines were left out).
 diff_body() {
+    # (the lines may come from a can: vis() writes control characters as
+    # plain letters, see CTRL_AWK in lib/common.sh)
     awk -v ma="${1:-}" -v mb="${2:-}" -v grey="$C_GREY" -v red="$C_RED" -v green="$C_GREEN" \
-        -v off="$C_RESET" -v bm="$B_MINUS" -v bp="$B_PLUS" '
+        -v off="$C_RESET" -v bm="$B_MINUS" -v bp="$B_PLUS" "$CTRL_AWK"'
         BEGIN { if (ma != "") while ((getline l < ma) > 0) A[++na] = l
                 if (mb != "") while ((getline l < mb) > 0) B[++nb] = l }
         function real_a(n) { return (ma != "" && n in A) ? A[n] : n }
@@ -613,7 +620,7 @@ diff_body() {
                 if (hunks++) printf "       %s⋯%s\n", grey, off
                 next }
         /^\\/ { printf "           %s%s%s\n", grey, substr($0, 3), off; next }
-        { c = substr($0, 1, 1); t = substr($0, 2) }
+        { c = substr($0, 1, 1); t = vis(substr($0, 2)) }
         c == "-" { printf "%s %s%4s%s   %s%s%s\n", bm, grey, real_a(o), off, red, t, off; o++; next }
         c == "+" { printf "%s %s%4s%s   %s%s%s\n", bp, grey, real_b(n), off, green, t, off; n++; next }
                  { printf "    %s%4s%s   %s\n", grey, real_b(n), off, t; o++; n++ }'

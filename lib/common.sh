@@ -79,7 +79,7 @@ B_SUDO="${C_SUDO}[SUDO REQUIRED]${C_RESET}"
 #   changed) in grey, so it does not read like a value.
 value_word() {
     if [ "$1" = "(default)" ]; then printf '%s(default)%s' "$C_GREY" "$C_RESET"
-    else printf '%s' "$1"; fi
+    else visible "$1"; fi     # (the value may come from a can)
 }
 
 # line_counts_text PLUS MINUS -> "(+3 | -1)" for the lines a file gains
@@ -536,12 +536,14 @@ can_ref() {
 LABEL_MAX=40
 
 # clean_label TEXT -> sets LABEL to TEXT as one line (tabs and line breaks
-#   become spaces), or stops when it is longer than LABEL_MAX characters.
+#   become spaces, other control characters are left out), or stops when
+#   it is longer than LABEL_MAX characters.
 #   Characters, not bytes: a Thai letter counts as one, and so does a
 #   vowel or tone mark written above or below it.
 LABEL=""
 clean_label() {
-    local LC_ALL=C.UTF-8 text="${1//[$'\t\n\r']/ }"
+    local LC_ALL=C.UTF-8 text="${1//[$'\t\n\r']/ }" c
+    for c in "${CTRL_FROM[@]}"; do text="${text//"$c"/}"; done
     [ "${#text}" -le "$LABEL_MAX" ] \
         || die "The label is too long: ${#text} characters (at most $LABEL_MAX)"
     LABEL="$text"
@@ -594,13 +596,71 @@ to_tilde() {
     esac
 }
 
+# Control characters are invisible letters that a terminal takes as
+# orders instead of showing them: change the colour, move the cursor,
+# erase a line. This program sends such orders itself (the coloured
+# badges), but text that comes from a can must never send them: anyone
+# can edit a can, and its label could then erase lines of "list" or paint
+# "checked, safe" in green. So text from a can is shown with each control
+# character written as plain letters, the way "cat -v" writes them: ESC
+# as ^[, a carriage return as ^M, the 8-bit form of ESC [ as M-^[. Tabs
+# and line breaks stay as they are. Labels and the other fields of a
+# manifest lose them altogether (read_manifest, clean_label).
+CTRL_FROM=() CTRL_TO=() CTRL_SET=""
+for _i in {1..8} {11..31} 127 {128..159}; do
+    printf -v _o '%03o' "$_i"
+    if [ "$_i" -lt 128 ]; then
+        printf -v _c "\\$_o"
+        if [ "$_i" -eq 127 ]; then _l='?'; else printf -v _o '%03o' $((_i + 64)); printf -v _l "\\$_o"; fi
+        CTRL_TO+=("^$_l")
+    else
+        # 128-159: the same orders in their 8-bit form, as UTF-8 writes them
+        printf -v _c "\\302\\$_o"
+        printf -v _o '%03o' $((_i - 64)); printf -v _l "\\$_o"
+        CTRL_TO+=("M-^$_l")
+    fi
+    CTRL_FROM+=("$_c"); CTRL_SET+="$_c"
+done
+unset _i _o _c _l
+
+# to_visible VAR TEXT -> sets VAR to TEXT with its control characters
+#   written as plain letters (see above). visible TEXT prints that.
+to_visible() {
+    local _t="$2" _k
+    if [[ "$_t" == *["$CTRL_SET"]* ]]; then
+        for _k in "${!CTRL_FROM[@]}"; do _t="${_t//"${CTRL_FROM[$_k]}"/"${CTRL_TO[$_k]}"}"; done
+    fi
+    printf -v "$1" '%s' "$_t"
+}
+visible() { local _v; to_visible _v "$1"; printf '%s' "$_v"; }
+
+# The same for awk: a program that starts with "$CTRL_AWK" has vis(s)
+# (control characters written as plain letters) and novis(s) (removed).
+# (Plain text search instead of gsub: some marks contain a "\".)
+CTRL_AWK='
+BEGIN {
+    for (ci = 1; ci < 32; ci++) if (ci != 9 && ci != 10) { CF[++CN] = sprintf("%c", ci); CT[CN] = "^" sprintf("%c", ci + 64) }
+    CF[++CN] = sprintf("%c", 127); CT[CN] = "^?"
+    for (ci = 128; ci < 160; ci++) { CF[++CN] = sprintf("%c%c", 194, ci); CT[CN] = "M-^" sprintf("%c", ci - 64) }
+}
+function ctrl_swap(s, strip,   k, p) {
+    for (k = 1; k <= CN; k++)
+        while ((p = index(s, CF[k])) > 0) s = substr(s, 1, p - 1) (strip ? "" : CT[k]) substr(s, p + length(CF[k]))
+    return s
+}
+function vis(s) { return ctrl_swap(s, 0) }
+function novis(s) { return ctrl_swap(s, 1) }
+'
+
 # shell_word WORD -> WORD written so that it can be typed (or pasted) into
 #   a terminal as one word: as it is when it holds only plain characters,
 #   else in single quotes. A leading "~/" stays outside the quotes, so the
-#   terminal still reads it as your home folder.
+#   terminal still reads it as your home folder. Control characters are
+#   written as plain letters (to_visible): they can never be typed anyway.
 #   Examples:  ~/repos/cinnamon-can     ~/'My Programs/cinnamon can'
 shell_word() {
-    local w="$1" start=""
+    local w start=""
+    to_visible w "$1"
     [ "$w" != "~" ] || { printf '~'; return 0; }
     case "$w" in "~/"*) start="~/" w="${w#\~/}" ;; esac
     if [[ "$w" =~ ^[A-Za-z0-9_./:@%+=,-]+$ ]]; then printf '%s%s' "$start" "$w"

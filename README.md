@@ -219,6 +219,9 @@ How to read it:
   a file, with `(+N | -N)`: how many lines the can adds and removes. The
   grey numbers next to the `-`/`+` are line numbers in the file.
 - `(default)` means the setting is at Cinnamon's default on that side.
+- `^[`, `^M` and the like stand for invisible control characters in a
+  setting or a file. They are written as letters, so that text from a
+  can cannot change what your terminal shows.
 - `[NEW]` / `[DEL]`: files only one side has. Against this computer,
   `[NEW]` is a file `open` would create and `[DEL]` one it would delete
   (never a system file); between two cans, `[NEW]` is only in the second
