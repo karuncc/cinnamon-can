@@ -207,7 +207,7 @@ norm_locale() { tr '[:upper:]' '[:lower:]' | sed 's/\.utf-\{0,1\}8$//; s/@.*$//'
 #           └ apt       code          software
 #   (On the normal output, since it is part of a report.)
 show_missing() {
-    local refs="$1" tree="$2" kind name where remote apt="" flat="" l
+    local refs="$1" tree="$2" kind name where remote apt="" flat="" l shown
     local heading="Software, themes and fonts the can uses"
     say ""
     if [ ! -s "$refs" ]; then
@@ -217,10 +217,15 @@ show_missing() {
     msg_lines "$B_WARN" "$heading, not installed here:"
     table_head 9 "TYPE" 36 "NAME" 0 "USED BY ITEM"
     while IFS=$'\t' read -r kind name where remote; do
-        printf '%s%-9s %-36s %s%s\n' "$ROW" "$kind" "$name" "$(item_dot "$where")" "$where"
+        # The names come from the can. In the table they are shown as
+        # plain text (to_visible); in the commands to copy each one is
+        # also kept as one word (shell_word), so a "name" such as
+        # "x; rm -rf ~" can only fail as a package name, never run.
+        to_visible shown "$name"
+        printf '%s%-9s %-36s %s%s\n' "$ROW" "$kind" "$shown" "$(item_dot "$where")" "$where"
         case "$kind" in
-            apt)     apt="$apt $name" ;;
-            flatpak) flat="${flat}flatpak install ${remote:-flathub} $name"$'\n' ;;
+            apt)     apt="$apt $(shell_word "$name")" ;;
+            flatpak) flat="${flat}flatpak install $(shell_word "${remote:-flathub}") $(shell_word "$name")"$'\n' ;;
         esac
     done < "$refs"
     if [ -n "$apt$flat" ]; then
