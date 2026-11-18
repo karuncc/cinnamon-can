@@ -590,7 +590,11 @@ A can is a `.tar.gz` file with this inside:
 | `items/ITEM/*.txt` | wallpaper name, language, time zone, software list, crontab |
 
 The log, `~/cinnamon-cans/cinnamon-can.log`, records every `seal` and `open`
-(`label` and `delete` leave it as it is).
+(`label` and `delete` leave it as it is). Deleting it loses only what it
+remembers: the "Latest applied" line of `list`, the warning `delete` gives
+before it deletes the way back from the latest `open`, and which IDs were
+used (the ID of a deleted can may then be given again). The cans and
+autocans stay as they are; a new log starts with the next `seal` or `open`.
 
 ## Contributing
 
