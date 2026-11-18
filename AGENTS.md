@@ -7,8 +7,9 @@
 A small command-line tool that keeps a Linux Mint Cinnamon desktop in
 "cans" (snapshots) and puts it back:
 
-- `seal [-L TEXT]` makes a can, `list` shows cans, `peek CAN` shows what is
-  inside, `diff CAN [CAN2]` compares, `open CAN` makes the computer match a
+- `seal [-L TEXT]` makes a can, `list` shows cans, `peek CAN [ITEM]` shows
+  what is inside (one item in full: every setting and the text of every
+  file), `diff CAN [CAN2]` compares, `open CAN` makes the computer match a
   can (shows a summary of the changes, asks for `yes`, saves an "autocan"
   first, then asks whether to restart the computer), `label CAN TEXT`
   gives a can another label, `delete CAN...` deletes cans (asks for `yes`).
@@ -153,7 +154,9 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   everything else from a can (setting names and values, file names and
   lines, software names) is shown with them written as plain letters,
   `^[` for ESC: `to_visible`/`visible` in bash, `vis()` in awk (put
-  `"$CTRL_AWK"` in front of the program). `shell_word` does it too.
+  `"$CTRL_AWK"` in front of the program). `shell_word` does it too. A
+  name from a can is looked up as plain text (`grep -F --`), never as a
+  pattern.
 - Sentences start with a capital letter, labels the program writes too.
 - `warn` and `err` go to stderr; a warning that is part of a report
   (`diff`, `seal`, `list`, the summary of `open`) uses

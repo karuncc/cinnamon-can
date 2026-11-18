@@ -680,6 +680,20 @@ config_option() {
     fi
 }
 
+# show_path KIND REL -> how a path inside an item of a can is shown:
+#   home/... as ~/..., root/... as /..., crontab.txt as "crontab"
+#   (a file name may come from a can: see to_visible)
+show_path() {
+    local p
+    to_visible p "$2"
+    case "$p" in
+        home/*)      printf '~/%s' "${p#home/}" ;;
+        root/*)      printf '/%s' "${p#root/}" ;;
+        crontab.txt) printf 'crontab' ;;
+        *)           printf '%s' "$p" ;;
+    esac
+}
+
 # rel_path PATH -> a path inside the program's folder written from there
 #   (config/default.conf, items/sound.item), as "help" writes them; any
 #   other path with ~ for your home folder.

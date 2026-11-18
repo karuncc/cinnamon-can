@@ -47,7 +47,10 @@ pass() { TESTS=$((TESTS + 1)); printf '  ok   %s\n' "$1"; }
 fail() { TESTS=$((TESTS + 1)); FAILS=$((FAILS + 1)); printf '  FAIL %s\n' "$1"; }
 # check TEXT COMMAND... -> pass or fail by whether the command succeeds.
 check()   { local msg="$1"; shift; if "$@" >/dev/null 2>&1; then pass "$msg"; else fail "$msg"; fi; }
-has()     { printf '%s' "$1" | grep -qF -- "$2"; }
+# (has: a plain text search inside bash. A pipe into "grep -q" would fail
+# on long output: grep stops at the first match, the writer is cut off,
+# and with pipefail that counts as a failure.)
+has()     { [[ "$1" == *"$2"* ]]; }
 hasnt()   { ! has "$1" "$2"; }
 section() { printf '\n== %s\n' "$1"; }
 
@@ -155,6 +158,42 @@ check "list shows the label"    has "$out" "test can"
 run s out "$CC" -c "$CONF" peek "$BASEID"
 check "peek: exit 0"            [ "$s" -eq 0 ]
 check "peek lists the items"    has "$out" "keyboard"
+# The files of the can, each under the item it is in.
+PF="$(tar -tzf "$BASE" | sed -n 's|^\./items/\([^/]*\)/home/\(.*[^/]\)$|\1 \2|p' | head -n 1)"
+if [ -n "$PF" ]; then
+    check "peek lists the files of the can"         has "$out" "           └ ~/${PF#* }"
+    check "... under the item they are in"          sh -c 'printf "%s\n" "$1" | awk -v i="         └ $2" -v f="           └ ~/$3" "\$0 == i { under = 1; next } /^         └ / { under = 0 } under && \$0 == f { ok = 1 } END { exit !ok }"' sh "$out" "${PF%% *}" "${PF#* }"
+else
+    printf '  skip the can has no home files\n'
+fi
+check "... with nothing switched off: no note about it" hasnt "$out" "switched off here"
+# An item the can has but this computer switches off: marked in the table.
+PN="$(tar -tzf "$BASE" | sed -n 's|^\./items/\([^/]*\)/.*|\1|p' | sort -u | head -n 1)"
+printf '[general]\nbackup_dir = %s\n\n[items]\n%s = no\n' "$TMP/cans" "$PN" > "$TMP/off.conf"
+run s out "$CC" -c "$TMP/off.conf" peek "$BASEID"
+check "peek marks an item switched off here"    sh -c 'printf "%s\n" "$1" | grep -qE "^         └ $2 +[0-9]+ +[0-9]+ \(switched off here\)"' sh "$out" "$PN"
+check "... and says what that means"            has "$out" "Items switched off here are left alone by diff and open"
+# One item in full: its settings with their values, its files with their text.
+run s out "$CC" -c "$CONF" peek "$BASEID"
+check "peek ends with the command to see one item" sh -c 'printf "%s\n" "$1" | grep -qE "^       \\\$ cinnamon-can -c $2 peek $3 [a-z0-9-]+$"' sh "$out" "${CONF/#"$HOME"\//\~/}" "$BASEID"
+if [ -n "$PF" ]; then
+    run s out "$CC" -c "$CONF" peek "$BASEID" "${PF%% *}"
+    check "peek CAN ITEM: exit 0"                   [ "$s" -eq 0 ]
+    check "... names the item"                      has "$out" "   INFO  Item ${PF%% *}: "
+    check "... shows each file"                     has "$out" "         └ • ~/${PF#* }  ("
+    L1="$(tar -xzOf "$BASE" "./items/${PF%% *}/home/${PF#* }" | head -n 1)"
+    check "... with its lines, numbered"            has "$out" "       1   $L1"
+fi
+SP="$(tar -xzOf "$BASE" ./items/keyboard/dconf.ini 2>/dev/null | awk '/^\[/ { s = substr($0, 2, length($0) - 2); next } index($0, "=") { print "/" s "/" substr($0, 1, index($0, "=") - 1); exit }')" || true
+if [ -n "$SP" ]; then
+    run s out "$CC" -c "$CONF" peek "$BASEID" keyboard
+    check "... shows each setting, its value under it" sh -c 'printf "%s\n" "$1" | grep -A1 -xF "         └ $2" | tail -n 1 | grep -qE "^           [^ ]"' sh "$out" "$SP"
+fi
+run s out "$CC" -c "$CONF" peek "$BASEID" no-such-item
+check "peek of an item the can does not have: exit 1" [ "$s" -eq 1 ]
+check "... says so, and names the items it has"  sh -c 'printf "%s" "$1" | grep -qF "has no item \"no-such-item\"" && printf "%s" "$1" | grep -qF "Its items: "' sh "$out"
+run s out "$CC" -c "$CONF" peek "$BASEID" keyboard extra
+check "peek with too many words: how to use it" has "$out" "Usage: cinnamon-can peek CAN [ITEM]"
 run s out "$CC" -c "$CONF" peek "$(printf '%s' "$BASEID" | tr '[:upper:]' '[:lower:]')"
 check "an ID may be typed in lower case" [ "$s" -eq 0 ]
 
@@ -493,7 +532,7 @@ section "text from a can never gives orders to the terminal"
 # is a command. Without a terminal the program prints no colours of its
 # own, so any control character in what it prints came from the can.
 E=$'\e' CR=$'\r' CSI=$'\xc2\x9b'
-noctl() { ! printf '%s' "$1" | grep -q "[$E$CR]" && ! printf '%s' "$1" | grep -qF "$CSI"; }
+noctl() { ! grep -q "[$E$CR]" <<< "$1" && ! grep -qF -- "$CSI" <<< "$1"; }
 U="$TMP/unpack-ctl"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
 sed -i "s/^id[[:space:]]*=.*/id = CTX2/; s/^label[[:space:]]*=.*/label = lab${E}[2Kel/; s/^hostname[[:space:]]*=.*/hostname = host${E}[31mname/" "$U/manifest.txt"
 printf '\n[org/cinnamon/sounds]\ncc-ctl-key=%s\n' "'red${E}[31mtext${CR}x'" >> "$U/items/sound/dconf.ini"
@@ -503,7 +542,7 @@ echo "cc${E}[2Kline${CSI}31m" >> "$F"
 mkdir -p "$U/items/sound/home/.config"
 echo hello > "$U/items/sound/home/.config/cc${E}[2Kname.txt"
 SW="$(find "$U/items" -name software.txt | head -n 1)"
-[ -z "$SW" ] || printf '[apps]\ncc-ctl%s[2Kpkg\nx; rm -rf ~\n' "$E" > "$SW"
+[ -z "$SW" ] || printf '[apps]\ncc-ctl%s[2Kpkg\nx; rm -rf ~\nb.sh\n' "$E" > "$SW"
 ( cd "$U" && tar -czf "$TMP/cans/manual-CTX2-20300101T000031+0000.tar.gz.canned" . )
 run s out "$CC" -c "$CONF" list
 check "list: no control character from a can reaches the screen" noctl "$out"
@@ -521,12 +560,18 @@ check "open: none either"                                     noctl "$out"
 if [ -n "$SW" ]; then
     check "... a software name shows them as plain letters"   has "$out" "cc-ctl^[[2Kpkg"
     check "... a package name in the command to copy stays one word" has "$out" "'x; rm -rf ~'"
+    check "... a name with a [ in it gives no grep error"       hasnt "$out" "grep:"
+    check "... a name is looked up as text: b.sh is not bash"  sh -c 'printf "%s\n" "$1" | grep -qE "└ apt +b\.sh +"' sh "$out"
 else
     printf '  skip the can has no software list\n'
 fi
 run s out "$CC" -c "$CONF" label CTX2 "new${E}[2Klabel"
 run s out "$CC" -c "$CONF" peek CTX2
 check "label: control characters are left out of a new label" has "$out" "Label: new[2Klabel"
+run s out "$CC" -c "$CONF" peek CTX2 sound
+check "peek CAN ITEM: none either"                            noctl "$out"
+check "... a setting's value as plain letters"              has "$out" "'red^[[31mtext^Mx'"
+check "... and a file name"                                  has "$out" "~/.config/cc^[[2Kname.txt"
 
 
 section "Ctrl+C"

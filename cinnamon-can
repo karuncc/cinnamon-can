@@ -4,7 +4,7 @@
 #
 #   seal   put the current desktop settings into a new can
 #   list   show all cans
-#   peek   show what is inside one can
+#   peek   show what is inside one can (or one item of it, in full)
 #   diff   show what differs: a can and this computer, or two cans
 #   open   make this computer match a can (after showing a summary and
 #          asking you), then offer to restart
@@ -42,7 +42,8 @@ Commands:
                     (-L, --label: a short description stored with
                     it, at most 40 characters)
   list              Show all cans
-  peek CAN          Show what is inside a can
+  peek CAN [ITEM]   Show what is inside a can, or one item
+                    of it in full (settings and file contents)
   diff CAN [CAN2]   Show what differs between a can and this
                     computer, or between two cans
   open CAN          Show a summary of the changes, ask, then
