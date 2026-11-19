@@ -15,6 +15,7 @@ dconf       = /org/cinnamon/desktop/keybindings/
               /org/freedesktop/ibus/
 files       = ~/.xinputrc
               ~/.config/fcitx/config  ~/.config/fcitx/profile  ~/.config/fcitx/conf/
+              ~/.config/fcitx/addon/
               ~/.config/fcitx5/config ~/.config/fcitx5/profile ~/.config/fcitx5/conf/
 # Written by the programs themselves: where the layout preview window and
 # the ibus panel were, which ibus version ran last, and which input method

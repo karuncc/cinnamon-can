@@ -291,7 +291,11 @@ cmd_peek() {
     say ""
     list_files "$tree"
     show_software "$tree"
-    first="$(tree_items "$tree" | head -n 1)"
+    # The first item's name, taken from the whole list (not with "head":
+    # when "head" stops reading early, the list is cut off, and the
+    # program would stop here without a word).
+    first="$(tree_items "$tree")"
+    first="${first%%$'\n'*}"
     [ -n "$first" ] || return 0
     say ""
     say "To see one item in full, run:"

@@ -159,7 +159,7 @@ run s out "$CC" -c "$CONF" peek "$BASEID"
 check "peek: exit 0"            [ "$s" -eq 0 ]
 check "peek lists the items"    has "$out" "keyboard"
 # The files of the can, each under the item it is in.
-PF="$(tar -tzf "$BASE" | sed -n 's|^\./items/\([^/]*\)/home/\(.*[^/]\)$|\1 \2|p' | head -n 1)"
+PF="$(tar -tzf "$BASE" | sed -n 's|^\./items/\([^/]*\)/home/\(.*[^/]\)$|\1 \2|p' | head -n 1)" || true
 if [ -n "$PF" ]; then
     check "peek lists the files of the can"         has "$out" "           └ ~/${PF#* }"
     check "... under the item they are in"          sh -c 'printf "%s\n" "$1" | awk -v i="         └ $2" -v f="           └ ~/$3" "\$0 == i { under = 1; next } /^         └ / { under = 0 } under && \$0 == f { ok = 1 } END { exit !ok }"' sh "$out" "${PF%% *}" "${PF#* }"
@@ -168,7 +168,7 @@ else
 fi
 check "... with nothing switched off: no note about it" hasnt "$out" "switched off here"
 # An item the can has but this computer switches off: marked in the table.
-PN="$(tar -tzf "$BASE" | sed -n 's|^\./items/\([^/]*\)/.*|\1|p' | sort -u | head -n 1)"
+PN="$(tar -tzf "$BASE" | sed -n 's|^\./items/\([^/]*\)/.*|\1|p' | sort -u | head -n 1)" || true
 printf '[general]\nbackup_dir = %s\n\n[items]\n%s = no\n' "$TMP/cans" "$PN" > "$TMP/off.conf"
 run s out "$CC" -c "$TMP/off.conf" peek "$BASEID"
 check "peek marks an item switched off here"    sh -c 'printf "%s\n" "$1" | grep -qE "^         └ $2 +[0-9]+ +[0-9]+ \(switched off here\)"' sh "$out" "$PN"
@@ -181,7 +181,7 @@ if [ -n "$PF" ]; then
     check "peek CAN ITEM: exit 0"                   [ "$s" -eq 0 ]
     check "... names the item"                      has "$out" "   INFO  Item ${PF%% *}: "
     check "... shows each file"                     has "$out" "         └ • ~/${PF#* }  ("
-    L1="$(tar -xzOf "$BASE" "./items/${PF%% *}/home/${PF#* }" | head -n 1)"
+    L1="$(tar -xzOf "$BASE" "./items/${PF%% *}/home/${PF#* }" | head -n 1)" || true
     check "... with its lines, numbered"            has "$out" "       1   $L1"
 fi
 SP="$(tar -xzOf "$BASE" ./items/keyboard/dconf.ini 2>/dev/null | awk '/^\[/ { s = substr($0, 2, length($0) - 2); next } index($0, "=") { print "/" s "/" substr($0, 1, index($0, "=") - 1); exit }')" || true
@@ -202,7 +202,7 @@ check "an ID may be typed in lower case" [ "$s" -eq 0 ]
 # (It has no label either: "Label: (none)" is shown.)
 U="$TMP/unpack-peek"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
 sed -i 's/^id[[:space:]]*=.*/id = PEK2/; s/^cinnamon_version[[:space:]]*=.*/cinnamon_version = 0.0.1/; /^label[[:space:]]*=/d' "$U/manifest.txt"
-SW="$(find "$U/items" -name software.txt | head -n 1)"
+SW="$(find "$U/items" -name software.txt | head -n 1)" || true
 [ -z "$SW" ] || printf '[apps]\ncc-no-such-package\n' > "$SW"
 ( cd "$U" && tar -czf "$TMP/cans/manual-PEK2-20300101T000009+0000.tar.gz.canned" . )
 run s out "$CC" -c "$CONF" peek PEK2
@@ -234,7 +234,7 @@ check "open says it already matches"                  has "$out" "settings alrea
 # the sudo command instead of asking, saving an autocan and restarting.
 U="$TMP/unpack-system"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
 if [ -d "$U/items/system/root" ]; then
-    F="$(find "$U/items/system/root" -type f | head -n 1)"
+    F="$(find "$U/items/system/root" -type f | head -n 1)" || true
     echo "# changed by run-tests.sh" >> "$F"
     sed -i 's/^id[[:space:]]*=.*/id = SYS2/' "$U/manifest.txt"
     ( cd "$U" && tar -czf "$TMP/cans/manual-SYS2-20300101T000001+0000.tar.gz.canned" . )
@@ -253,7 +253,7 @@ printf '\n[org/cinnamon/sounds]\ncc-test-key=true\n' >> "$U/items/sound/dconf.in
 mkdir -p "$U/items/sound/home/.config"
 echo hello > "$U/items/sound/home/.config/cc-test-file.txt"
 # One more line at the end of a text file the can has: shown with its number.
-T="$(find "$U/items" -path '*/home/*' -type f -name '*.json' | head -n 1)"
+T="$(find "$U/items" -path '*/home/*' -type f -name '*.json' | head -n 1)" || true
 TN="$(wc -l < "$T")"
 [ -z "$(tail -c 1 "$T")" ] || { echo >> "$T"; TN=$((TN + 1)); }
 echo "cc-added-line" >> "$T"
@@ -284,7 +284,7 @@ check "... then it stops: no terminal to ask in"     sh -c '[ "$1" -eq 1 ] && pr
 # A can without a file this computer has: open would delete it, and the
 # summary names it.
 U="$TMP/unpack-deletes"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
-G="$(find "$U/items" -path '*/home/*' -type f | head -n 1)"
+G="$(find "$U/items" -path '*/home/*' -type f | head -n 1)" || true
 if [ -n "$G" ]; then
     rm "$G"
     sed -i 's/^id[[:space:]]*=.*/id = DEL2/' "$U/manifest.txt"
@@ -340,7 +340,7 @@ pack() {
 
 # The same for a file: the "+" can keeps one home file in its own item.
 U="$TMP/unpack-ownfile"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
-F="$(find "$U/items" -path '*/home/*' -type f | head -n 1)"
+F="$(find "$U/items" -path '*/home/*' -type f | head -n 1)" || true
 if [ -n "$F" ]; then
     REL="${F#"$U"/items/*/home/}"
     mkdir -p "$(dirname "$U/items/cc-own/home/$REL")"
@@ -416,7 +416,7 @@ check "... and in the table of items (peek, seal)" sh -c 'printf "%s\n" "$1" | g
 U="$TMP/unpack-missing"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
 sed -i 's/^id[[:space:]]*=.*/id = MIS2/' "$U/manifest.txt"
 sed -i "s/^gtk-theme=.*/gtk-theme='cc-no-such-theme'/" "$U/items/appearance/dconf.ini" 2>/dev/null || true
-SW="$(find "$U/items" -name software.txt | head -n 1)"
+SW="$(find "$U/items" -name software.txt | head -n 1)" || true
 [ -z "$SW" ] || sed -i '/^\[apps\]$/a cc-no-such-package' "$SW"
 ( cd "$U" && tar -czf "$TMP/cans/manual-MIS2-20300101T000007+0000.tar.gz.canned" . )
 run s out "$CC" -c "$CONF" diff "$BASEID" MIS2
@@ -469,7 +469,7 @@ check "only the real change is counted"                 sh -c 'printf "%s" "$1" 
 if [ -n "$R" ]; then
     U="$TMP/unpack-ignore2"; mkdir "$U"
     tar -C "$U" -xzf "$TMP/cans/manual-GN22-20300101T000004+0000.tar.gz.canned"
-    F="$(find "$U/items" -path "*/home/${R#\~/}" -type f | head -n 1)"
+    F="$(find "$U/items" -path "*/home/${R#\~/}" -type f | head -n 1)" || true
     echo "cc-real-line=1" >> "$F"
     sed -i 's/^id[[:space:]]*=.*/id = GN33/' "$U/manifest.txt"
     ( cd "$U" && tar -czf "$TMP/cans/manual-GN33-20300101T000005+0000.tar.gz.canned" . )
@@ -536,12 +536,12 @@ noctl() { ! grep -q "[$E$CR]" <<< "$1" && ! grep -qF -- "$CSI" <<< "$1"; }
 U="$TMP/unpack-ctl"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
 sed -i "s/^id[[:space:]]*=.*/id = CTX2/; s/^label[[:space:]]*=.*/label = lab${E}[2Kel/; s/^hostname[[:space:]]*=.*/hostname = host${E}[31mname/" "$U/manifest.txt"
 printf '\n[org/cinnamon/sounds]\ncc-ctl-key=%s\n' "'red${E}[31mtext${CR}x'" >> "$U/items/sound/dconf.ini"
-F="$(find "$U/items" -path '*/home/*' -type f -name '*.json' | head -n 1)"
+F="$(find "$U/items" -path '*/home/*' -type f -name '*.json' | head -n 1)" || true
 [ -z "$(tail -c 1 "$F")" ] || echo >> "$F"
 echo "cc${E}[2Kline${CSI}31m" >> "$F"
 mkdir -p "$U/items/sound/home/.config"
 echo hello > "$U/items/sound/home/.config/cc${E}[2Kname.txt"
-SW="$(find "$U/items" -name software.txt | head -n 1)"
+SW="$(find "$U/items" -name software.txt | head -n 1)" || true
 [ -z "$SW" ] || printf '[apps]\ncc-ctl%s[2Kpkg\nx; rm -rf ~\nb.sh\n' "$E" > "$SW"
 ( cd "$U" && tar -czf "$TMP/cans/manual-CTX2-20300101T000031+0000.tar.gz.canned" . )
 run s out "$CC" -c "$CONF" list
@@ -764,7 +764,8 @@ printf '%s\n' \
     "$HOME/.config/enchant/en.dic" \
     "$HOME/.config/autostart/nvidia-prime.desktop" \
     "$HOME/.config/autostart/something-else.desktop" \
-    "$HOME/.config/monitors.xml" > "$TMP/fake-files.txt"
+    "$HOME/.config/monitors.xml" \
+    "$HOME/.config/fcitx/addon/fcitx-clipboard.conf" > "$TMP/fake-files.txt"
 own="$(awk -f "$ROOT/lib/files.awk" "$TMP/pat-files.txt" "$TMP/fake-files.txt")"
 check "bookmarks belong to nemo, not appearance"  has "$own" "nemo$TAB$HOME/.config/gtk-3.0/bookmarks"
 check "gtk settings belong to appearance"         has "$own" "appearance$TAB$HOME/.config/gtk-3.0/settings.ini"
@@ -772,6 +773,7 @@ check "dictionary words belong to personal"       has "$own" "personal$TAB$HOME/
 check "nvidia autostart belongs to hardware"      has "$own" "hardware$TAB$HOME/.config/autostart/nvidia-prime.desktop"
 check "other autostart belongs to default-apps"   has "$own" "default-apps$TAB$HOME/.config/autostart/something-else.desktop"
 check "monitor layout belongs to hardware"        has "$own" "hardware$TAB$HOME/.config/monitors.xml"
+check "fcitx add-ons switched on/off belong to keyboard" has "$own" "keyboard$TAB$HOME/.config/fcitx/addon/fcitx-clipboard.conf"
 
 
 section "what programs write by themselves (the built-in items' ignore lines)"
@@ -802,6 +804,11 @@ window-width=790
 size=(650, 500)
 [org/x/editor/state/history-entry]
 history-search-for=['secret']
+[org/x/editor/plugins/filebrowser/on-load]
+root='file:///'
+virtual-root='file:///tmp'
+tree-view=true
+enable-remote=true
 [org/gnome/evolution-data-server]
 migrated=true
 [org/gnome/terminal/legacy]
@@ -834,6 +841,9 @@ for p in /org/nemo/window-state/geometry /org/gnome/libgnomekbd/preview/x \
          /desktop/ibus/general/version /desktop/ibus/panel/x \
          /org/gtk/settings/file-chooser/window-size /org/gtk/settings/file-chooser/last-folder-uri \
          /com/linuxmint/updates/window-width /org/x/editor/state/window/size \
+         /org/x/editor/plugins/filebrowser/on-load/root \
+         /org/x/editor/plugins/filebrowser/on-load/virtual-root \
+         /org/x/editor/plugins/filebrowser/on-load/tree-view \
          /org/gnome/evolution-data-server/migrated /org/gnome/terminal/legacy/schema-version \
          /io/github/celluloid-player/celluloid/window-state/width; do
     check "noise is ignored: $p" ignored "$p"
@@ -842,6 +852,7 @@ for p in /org/nemo/window-state/side-pane-view /desktop/ibus/general/preload-eng
          /desktop/ibus/panel/show-icon-on-systray /org/gtk/settings/file-chooser/show-hidden \
          /io/github/celluloid-player/celluloid/last-folder-enable \
          /io/github/celluloid-player/celluloid/window-state/volume \
+         /org/x/editor/plugins/filebrowser/on-load/enable-remote \
          /org/cinnamon/window-effect-speed /org/cinnamon/desktop/keybindings/media-keys/window-screenshot; do
     check "a choice still counts: $p" counted "$p"
 done

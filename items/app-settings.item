@@ -25,6 +25,9 @@ ignore      = */window-size  */window-width  */window-height  */window-position
               */window-ratio  */maximized  */is-maximized  */*paned-position
               */*-history  */migrated*  */schema-version
               /org/x/editor/state/
+              /org/x/editor/plugins/filebrowser/on-load/root
+              /org/x/editor/plugins/filebrowser/on-load/virtual-root
+              /org/x/editor/plugins/filebrowser/on-load/tree-view
               /org/x/warpinator/window-state/
               /org/x/thingy/width  /org/x/thingy/height
               /org/gnome/rhythmbox/size  /org/gnome/rhythmbox/position
