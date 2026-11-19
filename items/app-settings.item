@@ -6,7 +6,9 @@ dconf       = /
 # Never kept. What THIS computer did (when it last checked for updates,
 # what its installer put on), and what is private: Bluetooth devices you
 # connected to, what you searched for in Text Editor and in Passwords and
-# Keys, the key you last signed with.
+# Keys, the key you last signed with. (They are also on the program's own
+# never-kept list in lib/items.sh, so no item keeps them, not even one of
+# your own; they stay here for older versions of the program.)
 exclude     = /com/linuxmint/updates/install-last-run
               /com/linuxmint/updates/refresh-last-run
               /com/linuxmint/install/installed-apps

@@ -89,8 +89,13 @@ LICENSE               MIT
   places, versions, history, time stamps) goes into the `ignore` of the
   item that takes it; the catch-alls `other` and `app-settings` carry the
   common naming patterns. What is private or only means something on this
-  computer (a command history, a computer ID) is not noise: `exclude` it
-  (or, across all items, `NEVER_KEEP_DCONF` in `lib/items.sh`). `diff`
+  computer (a command history, a computer ID) is not noise: it goes on
+  `NEVER_KEEP_DCONF` in `lib/items.sh`, which holds for every item (an
+  `exclude` holds only while its item owns the setting: a user item that
+  takes the app's folder would keep it). Also `exclude` it in the
+  built-in item that takes it, so older versions reading a new can leave
+  it alone; `diff` and `open` drop it from older cans that hold it
+  (`drop_never_kept`). `diff`
   and `open` use the `ignore` of the can's items AND of this computer's
   items of the same name, so a new line also quiets older cans. What may
   go into a built-in `ignore`: "Ignore lines in built-in items" in

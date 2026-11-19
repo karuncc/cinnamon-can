@@ -245,6 +245,22 @@ if [ -d "$U/items/system/root" ]; then
 else
     printf '  skip the can has no system files on this computer\n'
 fi
+# A can made by an older version that still holds a setting which is
+# never kept now (an item of the user's own could take it then): it is
+# not compared and not written back, so the can still matches.
+U="$TMP/unpack-never"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+printf "\n[org/x/editor/state/history-entry]\nhistory-search-for=['cc-secret']\n" >> "$U/items/sound/dconf.ini"
+sed -i 's/^id[[:space:]]*=.*/id = NEV2/' "$U/manifest.txt"
+( cd "$U" && tar -czf "$TMP/cans/manual-NEV2-20300101T000051+0000.tar.gz.canned" . )
+run s out "$CC" -c "$CONF" diff NEV2
+check "an older can's never-kept setting is not compared" [ "$s" -eq 0 ]
+check "... nor shown"                                     hasnt "$out" "cc-secret"
+run s out "$CC" -c "$CONF" open NEV2
+check "... nor written back: open finds nothing to change" has "$out" "settings already match"
+run s out "$CC" -c "$CONF" diff "$BASEID" NEV2
+check "... nor compared between two cans"                 [ "$s" -eq 0 ]
+run s out "$CC" -c "$CONF" diff NEV2 "$BASEID"
+check "... either way round"                              [ "$s" -eq 0 ]
 
 
 section "a can that differs (crafted, so this works on any computer)"
@@ -859,6 +875,42 @@ done
 for p in command-history history-search-for recent-connections; do
     check "private, never kept: $p" hasnt "$kept" "/$p$TAB"
 done
+# An item of your own that takes whole folders of these apps keeps none
+# of the never-kept settings either (the "exclude" of a built-in item
+# holds only while that item owns the setting).
+mkdir -p "$TMP/own-items"
+printf '%s\n' 'description = test' 'default = on' \
+    'dconf = /org/x/editor/ /org/cinnamon/ /org/blueman/ /apps/seahorse/' \
+    '        /desktop/gnome/crypto/ /com/linuxmint/' > "$TMP/own-items/cc-apps.item"
+load_items "$ROOT/items" "$TMP/own-items"
+write_dconf_patterns "$TMP/pat-own.txt"
+cat > "$TMP/private-dump.txt" <<'EOF'
+[org/x/editor/state/history-entry]
+history-search-for=['secret']
+[org/x/editor/preferences/editor]
+scheme='oblivion'
+[org/cinnamon]
+command-history=['some command']
+looking-glass-history=['some code']
+[apps/seahorse]
+last-search-text='secret'
+[org/blueman/plugins/recentconns]
+recent-connections=['a device']
+[desktop/gnome/crypto/pgp]
+last-signer='ABCD'
+[com/linuxmint/updates]
+install-last-run=12345
+refresh-last-run=12345
+[com/linuxmint/install]
+installed-apps=['an app']
+EOF
+mine="$(awk -f "$ROOT/lib/dconf.awk" -v flat=1 "$TMP/pat-own.txt" "$TMP/private-dump.txt")"
+check "an item of your own takes the app's folder" has "$mine" "cc-apps$TAB/org/x/editor/preferences/editor/scheme"
+for p in history-search-for command-history looking-glass-history last-search-text \
+         recent-connections last-signer install-last-run refresh-last-run installed-apps; do
+    check "... but never keeps: $p" hasnt "$mine" "/$p$TAB"
+done
+load_items "$ROOT/items" ""
 check "fcitx's last input method is ignored" has "${ITEM_IGNORE[keyboard]}" "~/.config/fcitx/profile:IMName="
 
 

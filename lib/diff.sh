@@ -87,6 +87,9 @@ build_comparison() {
 
     # The "+" side is always a can; its own catalog decides what is what.
     open_can "$plus_can" "$CC_TMP/can-plus"
+    # (an older can may hold settings that are never kept now; the "-"
+    # can below loses them when it is sorted into this can's items)
+    drop_never_kept "$CC_TMP/can-plus"
     CMP_PLUS_ID="${MAN[can.id]}"
     CMP_PLUS_REF="$(can_ref "$plus_can" "$CMP_PLUS_ID")"
     local plus_home="${MAN[can.home]}" plus_label

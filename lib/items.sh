@@ -47,12 +47,30 @@ declare -A ITEM_FILE=()     # where the .item file is
 declare -A ITEM_DESC=() ITEM_DEFAULT=() ITEM_DCONF=() ITEM_FILES=()
 declare -A ITEM_EXCLUDE=() ITEM_SYSTEM=() ITEM_SPECIAL=() ITEM_IGNORE=()
 
-# Settings that are never kept, whatever the items say: they identify this
-# computer, give away where you are, or belong to the screen size.
+# Settings that are never kept, whatever the items say (also your own
+# items, which may take a whole folder of an app): they identify this
+# computer, give away where you are, belong to the screen size, only mean
+# something on this computer (when it last looked for updates, what its
+# installer put on), or are private histories (what you typed into the
+# Run dialog and Looking Glass, what you searched for in Text Editor and
+# in Passwords and Keys, the Bluetooth devices you connected to, the key
+# you last signed with). The built-in items that take the later ones also
+# exclude them, for older versions of this program that read a new can.
+# A can made by an older version may still hold some of them: they are
+# left out when it is compared or opened (drop_never_kept).
 NEVER_KEEP_DCONF="/org/x/warpinator/preferences/connect-id
 /org/cinnamon/settings-daemon/plugins/color/night-light-last-coordinates
 /org/cinnamon/desktop/interface/scaling-factor
-/org/gnome/desktop/interface/scaling-factor"
+/org/gnome/desktop/interface/scaling-factor
+/com/linuxmint/updates/install-last-run
+/com/linuxmint/updates/refresh-last-run
+/com/linuxmint/install/installed-apps
+/org/cinnamon/command-history
+/org/cinnamon/looking-glass-history
+/org/x/editor/state/history-entry/
+/apps/seahorse/last-search-text
+/org/blueman/plugins/recentconns/recent-connections
+/desktop/gnome/crypto/pgp/last-signer"
 
 # load_items BUILTIN_DIR [USER_DIR]
 #   Reads every NAME.item file, checks it, and fills the ITEM_* arrays.
@@ -272,6 +290,29 @@ write_dconf_patterns() {
         done < <(split_words "${ITEM_EXCLUDE[$n]}")
     done < <(items_in_order)
     while IFS= read -r p; do printf 'never\t-\t%s\n' "$p" >> "$out"; done <<< "$NEVER_KEEP_DCONF"
+}
+
+# drop_never_kept DIR -> takes the never-kept settings out of every
+#   dconf.ini of an unpacked can in DIR. A can made by an older version
+#   may hold some (an item of your own could take them then); without
+#   them they are neither compared nor written back by "open". Each file
+#   goes through lib/dconf.awk with one item that takes everything, so
+#   only the never-kept lines go.
+drop_never_kept() {
+    local f p pat="$CC_TMP/never-patterns.txt" out="$CC_TMP/never-kept"
+    {
+        printf 'inc\tall\t/\n'
+        while IFS= read -r p; do printf 'never\t-\t%s\n' "$p"; done <<< "$NEVER_KEEP_DCONF"
+    } > "$pat"
+    for f in "$1"/items/*/dconf.ini; do
+        [ -f "$f" ] || continue
+        rm -rf "$out"; mkdir -p "$out"
+        awk -f "$CC_ROOT/lib/dconf.awk" -v outdir="$out" -v want="all" "$pat" "$f" \
+            || die "Could not read the settings in the can"
+        # (no file at all: every setting in it was a never-kept one)
+        if [ -f "$out/all.ini" ]; then mv "$out/all.ini" "$f"; else : > "$f"; fi
+    done
+    rm -rf "$out"
 }
 
 # keep_own_ignore -> remembers the "ignore" fields of the items on THIS

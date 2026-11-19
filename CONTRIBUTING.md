@@ -43,8 +43,8 @@ only when:
   schemas of the installed programs (`/usr/share/glib-2.0/schemas/`) and
   catches no setting a user would choose. When in doubt, list full paths.
 - **It is not private.** A history of what the user typed, device names
-  or a computer ID must not be kept at all: that is `exclude`, not
-  `ignore`.
+  or a computer ID must not be kept at all: that is `NEVER_KEEP_DCONF`
+  in `lib/items.sh`, not `ignore` (see `AGENTS.md`, Formats).
 
 Put the line in the item that takes the setting or file (`diff` shows
 each change under its item's name), with a comment saying what writes

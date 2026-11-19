@@ -13,7 +13,9 @@ dconf       = /org/cinnamon/
               /org/cinnamon/desktop/interface/first-day-of-week
               /org/gnome/desktop/interface/toolkit-accessibility
 # Never kept: what you typed into the Run dialog (Alt+F2) and into Looking
-# Glass. It can hold anything, even a password.
+# Glass. It can hold anything, even a password. (Also on the program's own
+# never-kept list in lib/items.sh, so no item keeps them, not even one of
+# your own; they stay here for older versions of the program.)
 exclude     = /org/cinnamon/command-history
               /org/cinnamon/looking-glass-history
 # Written by the programs themselves: where and how big a window was (the
