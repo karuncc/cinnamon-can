@@ -193,7 +193,11 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   It needs no set-up, writes only into its own temporary folder, and
   never touches the real backup folder or any setting: `open` only ever
   gets closed input, so it can never read a `yes`, and a fake `systemctl`
-  is first in PATH. It stops by itself on a can that already matches, on
+  is first in PATH. What needs odd files or folders (files you cannot
+  read, a read-only or FAT backup folder) runs the program with a home
+  folder of its own (`HOME` inside that temporary folder), and a
+  stand-in `chmod`, `dconf` or pager where the real one would not do.
+  It stops by itself on a can that already matches, on
   one where only system files differ, and right after its summary on one
   that differs (no terminal to ask in); its restart question is tried on
   its own, with that fake. `delete` gets its answers through `script`

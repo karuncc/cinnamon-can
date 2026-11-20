@@ -19,8 +19,9 @@
 # (also with a broken "cinnamon"), seal / list / peek / diff, cans with a
 # broken manifest, the diff columns and their order, which item owns
 # which setting and which file, what is excluded, ignored and never kept,
-# files you cannot read (in a home folder of their own), long labels and
-# names, label, delete.
+# the backup_dir values the config accepts, a PAGER of your own, files you
+# cannot read and odd backup folders (both in a home folder of their own),
+# long labels and names, label, delete.
 #
 # NOT covered -- follow the Testing rules in AGENTS.md instead: really
 # applying a can ("open" + yes), sudo, language, system files, the real
