@@ -121,6 +121,14 @@ A label is one line of at most 40 characters (a Thai vowel or tone mark
 counts as one); you can change it later with `label` (see "Change a label
 or delete a can").
 
+A file or folder that you cannot read (usually left behind by a program
+that was once run with sudo) is left out: your desktop runs as you, so it
+cannot read it either, and it makes no difference to how the desktop
+looks. `seal` names each one under a warning, with its item, and its last
+line says how many were left out. To keep one in your cans, make it
+readable for you; the warning shows on every `seal` until each one is
+readable or gone.
+
 ### Find a can
 
 ```
@@ -276,6 +284,8 @@ How to read it:
   many there are, and how to see them.
 - `[SUDO REQUIRED]` marks system files and the time zone: they are only
   put back with sudo (below).
+- A file or folder you cannot read on this computer is not compared: a
+  warning on top names it, and `open` leaves it as it is.
 - What programs write by themselves (where a window was, a time stamp) is
   not shown: built-in items `ignore` it, and you can add more (see "Your
   own items").
@@ -341,7 +351,9 @@ cinnamon-can open K7Q2
    language. If fcitx is running, it is asked to reload, so it does not
    write its old settings back (ibus keeps its settings among the others
    and needs nothing more). Files the can does not have are removed (the
-   summary names them; `diff` shows them as `[DEL]`). The old home folder
+   summary names them; `diff` shows them as `[DEL]`). Files and folders
+   you cannot read are left as they are, and the summary names them too:
+   the autocan could not keep a copy of them. The old home folder
    (`/home/olduser/...`) is replaced by yours everywhere. A wallpaper image
    this computer does not have is copied to
    `~/.local/share/backgrounds/cinnamon-can/`. Each step shows `[DONE]`,

@@ -114,6 +114,13 @@ LICENSE               MIT
 - **Log** `backup_dir/cinnamon-can.log`: seal and open only, `key=value`.
   `delete` leaves the log alone: its IDs keep `new_can_id` from reusing
   them, and `list` says when the can applied last is gone.
+- **Unreadable** files and folders (you cannot read them, so neither can
+  the desktop) are never kept, compared or written: `collect_tree` lists
+  them in `UNREADABLE` (`lib/collect.sh`), `seal`, `diff` and `open`
+  name them (`show_unreadable`), and `drop_unreadable` takes them out of
+  the comparison, so `open` never writes over or deletes what the autocan
+  could not copy. `open_can` makes every file of a can readable, so one
+  made by hand is still shown and compared.
 - Ownership: the longest matching path of ALL items (also switched-off
   ones) wins, user items win ties; catch-alls `other` and `app-settings`.
   `diff` and `open` always split both sides with the **can's** catalog

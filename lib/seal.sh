@@ -51,10 +51,16 @@ cmd_seal() {
     can_header "Sealing the can $(show_id "$CAN_ID") ..."
     say ""
     summarize_tree "Items to be sealed:" "$stage"
+    # What you cannot read, by name, here and once more in the last line:
+    # left out without a word, it would look like part of the can.
+    local left
+    left="$(unreadable_count)"
+    [ "$left" -eq 0 ] || { say ""; show_unreadable "Left out, since neither you nor your desktop can read them:"; }
     check_refs "$stage" > "$CC_TMP/refs.txt"
     show_missing "$CC_TMP/refs.txt" "$stage"
     say ""
-    show_sealed "The can is sealed:"
+    if [ "$left" -eq 0 ]; then show_sealed "The can is sealed:"
+    else show_sealed "The can is sealed ($left left out, see above):"; fi
 }
 
 # show_sealed TEXT -> TEXT as a success, then the can just made (CAN_ID,

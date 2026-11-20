@@ -42,6 +42,10 @@ open_can() {
     local can="$1" dir="$2"
     rm -rf "$dir"; mkdir -p "$dir"
     tar -C "$dir" -xzf "$can" 2>/dev/null || not_a_can "$can" damaged
+    # A can made by "seal" only holds what you could read; one made by hand
+    # may hold a file you cannot read, which could then be neither shown
+    # nor compared. (Links are left as they are.)
+    chmod -R u+rX -- "$dir" 2>/dev/null || true
     [ -f "$dir/manifest.txt" ] || not_a_can "$can" no-manifest
     read_manifest "$dir/manifest.txt"
     manifest_complete || not_a_can "$can" incomplete
