@@ -1,8 +1,10 @@
 # lib/list.sh -- the "list" and "peek" commands, and reading cans.
 #
-#   list        every can in the backup folder, newest first
-#   peek CAN    what is inside one can (only the can: it is not compared
-#               with this computer; "diff CAN" does that)
+#   list            every can in the backup folder, newest first
+#   peek CAN        what is inside one can (only the can: it is not
+#                   compared with this computer; "diff CAN" does that)
+#   peek CAN ITEM   one item of it in full: every setting with its value,
+#                   and every file with its text
 
 # MAN holds the manifest of the can that was opened last:
 #   MAN[can.id], MAN[can.label], MAN[can.home], MAN[items.keyboard] ...

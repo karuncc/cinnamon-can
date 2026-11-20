@@ -1,4 +1,5 @@
-# lib/diff.sh -- the "diff" command, and the comparison "open" shows.
+# lib/diff.sh -- the "diff" command, and the comparison that "open" sums
+# up before it asks.
 #
 #   cinnamon-can diff CAN          this computer (-) against the can (+)
 #   cinnamon-can diff CAN1 CAN2    CAN1 (-) against CAN2 (+)
