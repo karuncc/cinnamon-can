@@ -15,9 +15,10 @@
 #   4. Write: files first (so applets find their settings files), then the
 #      settings database, the language, the system files (only with sudo),
 #      and ask fcitx to reload. Files the can does not have are deleted
-#      (the summary names them); system files are
-#      never deleted. Ctrl+C is switched off while this runs (a few
-#      seconds), so the computer is never left half old, half new.
+#      (the summary names them); system files are never deleted, and
+#      nothing you cannot read is touched (the summary names that too:
+#      see drop_unreadable). Ctrl+C is switched off while this runs (a
+#      few seconds), so the computer is never left half old, half new.
 #   5. Write the log, show how to undo, and ask whether to restart now:
 #      "yes" restarts after a 10-second countdown, anything else (or
 #      Ctrl+C, also during the countdown) leaves it to you. Either way
@@ -43,6 +44,7 @@ cmd_open() {
     can_header "Opening the can $(show_id "$can_id") ..."
     show_version_notes "$CMP_NOTES" "$CMP_NOTES_TITLE"
     if [ "$CMP_TOTAL" -eq 0 ]; then
+        show_left_alone
         say ""; ok "This computer's settings already match the can $(show_id "$can_id")"
         return 0
     fi
@@ -68,6 +70,9 @@ cmd_open() {
     fi
 
     say ""
+    # Without an autocan there is no way back, so the backup folder must
+    # take one before "yes" is even asked for.
+    ensure_backup_dir check "The autocan (the way back) is saved there first; nothing was changed."
     [ -t 0 ] || die "Command \"open\" needs to be confirmed in a terminal"
     # (Ctrl+D ends the input: read fails, which counts as "no", not as a silent stop.)
     read -r -p "${MSG_INDENT}Type \"yes\" to apply these changes: " answer || { say ""; answer=""; }
@@ -143,7 +148,17 @@ open_summary() {
         msg_lines "$B_WARN" "It deletes ${#deleted[@]} file(s) that the can does not have:" "${deleted[@]}" \
             "${C_GREY}The autocan, sealed before anything changes, keeps a copy.${C_RESET}"
     fi
+    show_left_alone
     show_missing "$CMP_REFS" "$CMP_PLUS"
+}
+
+# show_left_alone -> the files and folders you cannot read, which "open"
+#   leaves as they are (see drop_unreadable): the autocan could not keep
+#   a copy of them, so writing over them could not be undone.
+show_left_alone() {
+    [ "$(unreadable_count)" -gt 0 ] || return 0
+    say ""
+    show_unreadable "Left as they are, since you cannot read them:"
 }
 
 

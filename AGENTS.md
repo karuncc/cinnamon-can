@@ -101,7 +101,12 @@ LICENSE               MIT
   go into a built-in `ignore`: "Ignore lines in built-in items" in
   `CONTRIBUTING.md`.
 - **Config** `config/default.conf`: `[general] backup_dir`, `[items] name =
-  yes|no`. Required; created from `config/example.conf`.
+  yes|no`. Required; created from `config/example.conf`. `backup_dir`
+  must be `~`, `~/...` or `/...` (`backup_dir_problem`: anything else
+  would depend on the folder the command runs in). The backup
+  folder goes through `ensure_backup_dir`: made private (700) only when
+  the program makes it, an existing one is never changed (cans and the
+  log are 600), and `seal`/`open` stop early when it cannot be written.
 - **Can** `{manual|autocan}-ID-YYYYMMDDTHHMMSS±HHMM.tar.gz.canned`, ID = 4
   characters from `23456789ABCDEFGHJKMNPQRSTUVWXYZ`, unique. Inside:
   `manifest.txt`, `catalog/{builtin,user}/*.item` (every item file known
@@ -114,6 +119,13 @@ LICENSE               MIT
 - **Log** `backup_dir/cinnamon-can.log`: seal and open only, `key=value`.
   `delete` leaves the log alone: its IDs keep `new_can_id` from reusing
   them, and `list` says when the can applied last is gone.
+- **Unreadable** files and folders (you cannot read them, so neither can
+  the desktop) are never kept, compared or written: `collect_tree` lists
+  them in `UNREADABLE` (`lib/collect.sh`), `seal`, `diff` and `open`
+  name them (`show_unreadable`), and `drop_unreadable` takes them out of
+  the comparison, so `open` never writes over or deletes what the autocan
+  could not copy. `open_can` makes every file of a can readable, so one
+  made by hand is still shown and compared.
 - Ownership: the longest matching path of ALL items (also switched-off
   ones) wins, user items win ties; catch-alls `other` and `app-settings`.
   `diff` and `open` always split both sides with the **can's** catalog
@@ -181,7 +193,11 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   It needs no set-up, writes only into its own temporary folder, and
   never touches the real backup folder or any setting: `open` only ever
   gets closed input, so it can never read a `yes`, and a fake `systemctl`
-  is first in PATH. It stops by itself on a can that already matches, on
+  is first in PATH. What needs odd files or folders (files you cannot
+  read, a read-only or FAT backup folder) runs the program with a home
+  folder of its own (`HOME` inside that temporary folder), and a
+  stand-in `chmod`, `dconf` or pager where the real one would not do.
+  It stops by itself on a can that already matches, on
   one where only system files differ, and right after its summary on one
   that differs (no terminal to ask in); its restart question is tried on
   its own, with that fake. `delete` gets its answers through `script`

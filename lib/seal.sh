@@ -38,6 +38,9 @@ cmd_seal() {
     mapfile -t on < <(items_on)
     [ "${#on[@]}" -gt 0 ] || die "Every item is switched off in $(conf_name 39)"
 
+    # Whether the can can be written at all, before the work of reading.
+    ensure_backup_dir check
+
     # What Ctrl+C says (see on_ctrl_c): a half-made can is removed.
     CC_CANCEL_NOTE="Cancelled; no can was made."
     info "Reading this computer's settings ..."
@@ -51,10 +54,16 @@ cmd_seal() {
     can_header "Sealing the can $(show_id "$CAN_ID") ..."
     say ""
     summarize_tree "Items to be sealed:" "$stage"
+    # What you cannot read, by name, here and once more in the last line:
+    # left out without a word, it would look like part of the can.
+    local left
+    left="$(unreadable_count)"
+    [ "$left" -eq 0 ] || { say ""; show_unreadable "Left out, since neither you nor your desktop can read them:"; }
     check_refs "$stage" > "$CC_TMP/refs.txt"
     show_missing "$CC_TMP/refs.txt" "$stage"
     say ""
-    show_sealed "The can is sealed:"
+    if [ "$left" -eq 0 ]; then show_sealed "The can is sealed:"
+    else show_sealed "The can is sealed ($left left out, see above):"; fi
 }
 
 # show_sealed TEXT -> TEXT as a success, then the can just made (CAN_ID,
@@ -76,9 +85,8 @@ show_sealed() {
 CAN_ID="" CAN_PATH=""
 package_can() {
     local stage="$1" kind="$2" label="$3" opened="$4" dir part n
+    ensure_backup_dir
     dir="$(backup_dir)"
-    mkdir -p "$dir" || die "Cannot create the backup folder $dir"
-    chmod 700 "$dir" 2>/dev/null || true
 
     CAN_ID="$(new_can_id)"
     CAN_PATH="$dir/$kind-$CAN_ID-$(date +%Y%m%dT%H%M%S%z).tar.gz.canned"
@@ -109,7 +117,9 @@ package_can() {
     part="$CAN_PATH.part"
     track_partial "$part"
     tar -C "$stage" -czf "$part" .
-    chmod 600 "$part"
+    # Private: only you can read it. (A USB stick formatted FAT or exFAT
+    # has no permissions to set; the can is written all the same.)
+    chmod 600 "$part" 2>/dev/null || true
     mv "$part" "$CAN_PATH"
     forget_partial "$part"
 }

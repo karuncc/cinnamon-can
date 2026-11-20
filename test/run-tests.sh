@@ -19,6 +19,8 @@
 # (also with a broken "cinnamon"), seal / list / peek / diff, cans with a
 # broken manifest, the diff columns and their order, which item owns
 # which setting and which file, what is excluded, ignored and never kept,
+# the backup_dir values the config accepts, a PAGER of your own, files you
+# cannot read and odd backup folders (both in a home folder of their own),
 # long labels and names, label, delete.
 #
 # NOT covered -- follow the Testing rules in AGENTS.md instead: really
@@ -38,8 +40,9 @@ TAB=$'\t'
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/cinnamon-can-test.XXXXXXXX")"
 # (a plain trap, not a cleanup function: lib/common.sh, which the last
-# test section loads, has a cleanup function of its own)
-trap 'rm -rf "$TMP"' EXIT
+# test section loads, has a cleanup function of its own; the files that
+# cannot be read are made readable again first, or they would stay)
+trap 'chmod -R u+rwX "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
 trap 'exit 130' INT TERM
 
 FAILS=0 TESTS=0
@@ -123,6 +126,32 @@ check "bad config: exit 1"             [ "$s" -eq 1 ]
 check "bad config: one header"         has "$out" "  ERROR  Invalid config file(s) detected:"
 check "... the file under it, with a dot" has "$out" "         └ • $TMP/bad.conf"
 check "... every mistake under the file"  sh -c 'for w in "L3: Expected" "L5-6: Item" "L7: Unknown section [colours]"; do printf "%s" "$1" | grep -qF "           └ $w" || exit 1; done' sh "$out"
+# backup_dir must be ~, ~/... or a full path: anything else would put cans
+# in whatever folder the command runs in. Each usual mistake gets a hint,
+# and nothing is made (not even by seal, run from a folder of its own).
+mkdir -p "$TMP/run here"
+bd() {   # bd VALUE COMMAND -> the line about backup_dir, or "ACCEPTED"
+    printf '[general]\nbackup_dir = %s\n' "$1" > "$TMP/bd.conf"
+    local o
+    o="$(cd "$TMP/run here" && "$CC" -c "$TMP/bd.conf" "${2:-list}" </dev/null 2>&1)" && { echo ACCEPTED; return; }
+    printf '%s\n' "$o" | sed -n 's/^           └ L2: //p'
+}
+for v in "~" "~/cc test cans/" "$TMP/cc test cans"; do
+    check "backup_dir \"$v\" is fine"                [ "$(bd "$v")" = ACCEPTED ]
+done
+check "backup_dir \"cans\": a hint"                 [ "$(bd cans)" = 'Setting "backup_dir" must start with ~/ or / (a full path), not "cans"; did you mean ~/cans?' ]
+check "... \"./cans\" too"                          [ "$(bd ./cans)" = 'Setting "backup_dir" must start with ~/ or / (a full path), not "./cans"; did you mean ~/cans?' ]
+check "... \"../cans\": refused, no guess"          [ "$(bd ../cans)" = 'Setting "backup_dir" must start with ~/ or / (a full path), not "../cans"' ]
+check "... \$HOME/cans: write ~/cans"               [ "$(bd '$HOME/cans')" = 'Setting "backup_dir" cannot use $HOME: write ~/cans' ]
+check "... \${HOME}/cans too"                       [ "$(bd '${HOME}/cans')" = 'Setting "backup_dir" cannot use $HOME: write ~/cans' ]
+check "... another variable: the full path"         [ "$(bd '$XDG_DATA_HOME/cans')" = 'Setting "backup_dir" cannot use variables ("$XDG_DATA_HOME/cans"): write the full path' ]
+check "... quotes: not needed, even with spaces"    [ "$(bd '"/tmp/cc my cans"')" = 'Setting "backup_dir" needs no quotes, also with spaces in it: write /tmp/cc my cans' ]
+check "... quotes around a mistake: that mistake"   [ "$(bd "'cans'")" = 'Setting "backup_dir" must start with ~/ or / (a full path), not "cans"; did you mean ~/cans?' ]
+check "... ~alex/cans: only your own home"          [ "$(bd '~alex/cans')" = 'Setting "backup_dir": ~ stands only for your own home folder (~/...), not "~alex/cans"' ]
+check "... a Windows path: refused, no guess"       [ "$(bd 'C:\cans')" = 'Setting "backup_dir" must start with ~/ or / (a full path), not "C:\cans"' ]
+check "... a control character is shown as letters" [ "$(bd $'cc\e[31mcans')" = 'Setting "backup_dir" must start with ~/ or / (a full path), not "cc^[[31mcans"; did you mean ~/cc^[[31mcans?' ]
+bd cans seal >/dev/null
+check "... and seal makes no folder where it runs"  [ -z "$(ls -A "$TMP/run here")" ]
 
 
 section "start-up checks"
@@ -658,6 +687,27 @@ if command -v script >/dev/null 2>&1; then
     check "list in a terminal: printed directly, no pager" hasnt "$out" "PAGED:"
     out="$(paged diff "$BASEID" TES2)" || true
     check "... while diff still uses the pager"            has "$out" "PAGED:"
+    # A PAGER of your own (stand-ins, so nothing waits for a key): less
+    # gets -R through LESS and keeps the colours; any other pager gets
+    # the text without colour codes; one that is not installed is said so.
+    # How a pager ends never changes what diff ends with (1: differences).
+    mkdir -p "$TMP/pagers"
+    printf '#!/bin/sh\necho "LESS=[$LESS] ARGS=[$*]"\nfor f; do :; done\ncat "$f"\n' > "$TMP/pagers/less"
+    printf '#!/bin/sh\ncat "$1"\nexit 3\n' > "$TMP/pagers/mypager"
+    chmod +x "$TMP/pagers/less" "$TMP/pagers/mypager"
+    pg() { script -qec "env $1 PATH=$(printf '%q' "$TMP/pagers:$PATH") $(printf '%q ' "$CC" -c "$CONF" diff "$BASEID" TES2); echo \"exit=\$?\"" /dev/null | tr -d '\r'; }
+    out="$(pg '-u LESS PAGER=less')" || true
+    check "PAGER=less: it gets -R, F and X like git gives" has "$out" "LESS=[-RFX]"
+    check "... so the colours stay"                        has "$out" $'\e['
+    check "... and diff ends with 1 (differences)"         has "$out" "exit=1"
+    out="$(pg "LESS=-i PAGER='less -S'")" || true
+    check "PAGER=less with LESS of your own: -R added"     has "$out" "LESS=[-R -i] ARGS=[-S "
+    out="$(pg 'PAGER=mypager')" || true
+    check "another pager: the text without colour codes"   sh -c 'printf "%s" "$1" | grep -qF "Summary of the comparison above" && ! printf "%s" "$1" | grep -q "$(printf "\033")"' sh "$out"
+    check "... its own exit code does not count"           has "$out" "exit=1"
+    out="$(pg 'PAGER=cc-no-such-pager' | sed 's/\x1b\[[0-9;]*m//g')" || true
+    check "a pager that is not installed: said so"         has "$out" "   WARN  The pager in PAGER is not installed: cc-no-such-pager"
+    check "... and the text follows"                       sh -c 'printf "%s" "$1" | grep -qF "Summary of the comparison above" && printf "%s" "$1" | grep -qF "exit=1"' sh "$out"
 else
     printf '  skip "script" is missing: what only shows in a terminal is not tried\n'
 fi
@@ -912,6 +962,182 @@ for p in history-search-for command-history looking-glass-history last-search-te
 done
 load_items "$ROOT/items" ""
 check "fcitx's last input method is ignored" has "${ITEM_IGNORE[keyboard]}" "~/.config/fcitx/profile:IMName="
+
+
+section "files you cannot read (in a home folder of their own)"
+# Your desktop runs as you, so what you cannot read makes no difference
+# to it: "seal" leaves it out and names it, "diff" does not compare it,
+# and "open" leaves it as it is. All of it in a home folder made for the
+# tests (HOME), so the real one is never touched.
+UH="$TMP/unread-home" UC="$TMP/unread"
+mkdir -p "$UH" "$UC/items"
+printf '[general]\nbackup_dir = %s\n' "$UC/cans" > "$UC/test.conf"
+cat > "$UC/items/cc-unread.item" <<'EOF'
+description = Files for the test of what cannot be read
+default     = on
+files       = ~/cc-unread/  ~/cc-blocked/inner/file.conf  ~/cc-glob/*.conf
+exclude     = ~/cc-unread/skip/
+system      = /root/cc-test.conf
+EOF
+mkdir -p "$UH/cc-unread/closed" "$UH/cc-unread/noenter" "$UH/cc-unread/skip" "$UH/cc-blocked/inner" "$UH/cc-glob"
+for f in cc-unread/ok.txt cc-unread/locked.txt cc-unread/closed/in.txt cc-unread/noenter/in.txt \
+         cc-unread/skip/in.txt cc-blocked/inner/file.conf cc-glob/a.conf; do
+    echo "$f" > "$UH/$f"
+done
+uh() { env HOME="$UH" XDG_CONFIG_HOME="$UH/.config" XDG_DATA_HOME="$UH/.local/share" PAGER=cat "$CC" -c "$UC/test.conf" "$@"; }
+run s out uh seal -L "all readable"
+# (/root can never be read; everything in the home folder can, so far)
+check "all home files readable: only /root is named"  sh -c 'printf "%s" "$1" | grep -qF "sealed (1 left out, see above):" && ! printf "%s" "$1" | grep -qF "└ ~/"' sh "$out"
+UA="$(find "$UC/cans" -name 'manual-*' | head -n 1)" || true
+UA="$(basename "$UA" | cut -d- -f2)"
+# Now a file without read permission, a folder without any (000) and one
+# that cannot be entered (600), a folder on the way to a single file, one
+# that a pattern looks in, and a system folder (/root). The folder that
+# its item leaves out on purpose (exclude) is not named at all.
+chmod 000 "$UH/cc-unread/locked.txt" "$UH/cc-unread/closed" "$UH/cc-unread/skip" "$UH/cc-blocked" "$UH/cc-glob"
+chmod 600 "$UH/cc-unread/noenter"
+run s out uh seal -L "some unreadable"
+check "seal with files you cannot read: exit 0"        [ "$s" -eq 0 ]
+check "... names them under a warning"                 has "$out" "   WARN  Left out, since neither you nor your desktop can read them:"
+check "... a file, with its item"                      has "$out" "         └ ~/cc-unread/locked.txt  (• cc-unread)"
+check "... a folder without permissions"               has "$out" "         └ ~/cc-unread/closed/  (• cc-unread, the whole folder)"
+check "... a folder that cannot be entered"            has "$out" "         └ ~/cc-unread/noenter/  (• cc-unread, the whole folder)"
+check "... a folder on the way to a file"              has "$out" "         └ ~/cc-blocked/  (• cc-unread, the whole folder)"
+check "... the folder a pattern looks in"              has "$out" "         └ ~/cc-glob/  (• cc-unread, the whole folder)"
+check "... a system folder"                            has "$out" "         └ /root/  (• cc-unread, the whole folder)"
+check "... not what its item excludes"                 hasnt "$out" "skip"
+check "... and says so in its last message"            has "$out" "     OK  The can is sealed (6 left out, see above):"
+UB="$(find "$UC/cans" -name 'manual-*' ! -name "*-$UA-*" | head -n 1)" || true
+inside="$(tar -tzf "$UB")"
+check "the can holds what could be read"               has "$inside" "./items/cc-unread/home/cc-unread/ok.txt"
+check "... and not the rest"                           hasnt "$inside" "locked.txt"
+# Against the can made while all was readable: nothing of it is compared
+# (this computer's side is unknown), and "open" would not touch it.
+run s out uh diff "$UA"
+check "diff: what you cannot read is named"            has "$out" "   WARN  Not compared, since you cannot read them on this computer:"
+check "... with its item"                              has "$out" "         └ ~/cc-unread/locked.txt  (• cc-unread)"
+check "... not shown as a file open would make"        hasnt "$out" "[NEW]"
+check "... so nothing differs"                         has "$out" "No differences."
+run s out uh open "$UA"
+check "open: left as they are, by name"                has "$out" "   WARN  Left as they are, since you cannot read them:"
+check "... with its item"                              has "$out" "         └ ~/cc-unread/closed/  (• cc-unread, the whole folder)"
+check "... nothing else differs: it already matches"   has "$out" "already match the can [$UA]"
+# A can that also brings a new file: the summary counts only that one,
+# and still names the rest as left alone (then stops: no terminal).
+U="$TMP/unpack-unread"; mkdir "$U"; tar -C "$U" -xzf "$TMP/unread/cans/manual-$UA-"*
+echo "from the can" > "$U/items/cc-unread/home/cc-unread/locked.txt"
+echo "new" > "$U/items/cc-unread/home/cc-unread/new.txt"
+sed -i 's/^id[[:space:]]*=.*/id = UNR2/' "$U/manifest.txt"
+( cd "$U" && tar -czf "$UC/cans/manual-UNR2-20300101T000000+0000.tar.gz.canned" . )
+run s out uh open UNR2
+check "open: the summary counts only what it may write" has "$out" "         └ ● 1 file(s)"
+check "... and names the rest as left alone"            has "$out" "         └ ~/cc-unread/locked.txt  (• cc-unread)"
+# A can made by hand may hold a file you cannot read (seal never makes
+# one): it is still shown and compared.
+( cd "$U" && sed -i 's/^id[[:space:]]*=.*/id = UNR3/' manifest.txt && echo "changed in the can" > items/cc-unread/home/cc-unread/ok.txt \
+    && tar -cf "$TMP/unr3.tar" --exclude=./items/cc-unread/home/cc-unread/ok.txt . \
+    && tar -rf "$TMP/unr3.tar" --mode=000 ./items/cc-unread/home/cc-unread/ok.txt )
+gzip -c "$TMP/unr3.tar" > "$UC/cans/manual-UNR3-20300101T000001+0000.tar.gz.canned"
+run s out uh diff "$UA" UNR3
+check "two cans, a file in one you cannot read: compared" has "$out" "changed in the can"
+run s out uh peek UNR3 cc-unread
+check "... and peek shows it"                          has "$out" "changed in the can"
+# The wallpaper: its setting is always kept, the image only when you can
+# read it. A stand-in "dconf" names the image, so the real settings are
+# not even read.
+mkdir -p "$TMP/wp-bin"
+cat > "$TMP/wp-bin/dconf" <<'EOF'
+#!/bin/sh
+echo "'file://$CC_WP'"
+EOF
+chmod +x "$TMP/wp-bin/dconf"
+wp() {   # wp IMAGE -> the warning collect_wallpaper leads to, if any
+    env PATH="$TMP/wp-bin:$PATH" CC_WP="$1" HOME="$UH" bash -c '
+        CC_ROOT="$1"; source "$1/lib/common.sh"; source "$1/lib/items.sh"; source "$1/lib/collect.sh"
+        CC_TMP="$2"; rm -rf "$CC_TMP"; mkdir -p "$CC_TMP/item"
+        UNREADABLE="$CC_TMP/unreadable.txt"; : > "$UNREADABLE"
+        collect_wallpaper "$CC_TMP/item" appearance
+        show_unreadable "Left out:"
+        [ ! -f "$CC_TMP/item/wallpaper.txt" ] || echo "image kept"' sh "$ROOT" "$TMP/wp-tmp" 2>&1
+}
+echo picture > "$UH/cc-pic.jpg"
+out="$(wp "$UH/cc-pic.jpg")"
+check "a wallpaper image you can read is kept"         sh -c '[ "$1" = "image kept" ]' sh "$out"
+chmod 000 "$UH/cc-pic.jpg"
+out="$(wp "$UH/cc-pic.jpg")"
+check "one you cannot read is named"                   has "$out" "         └ ~/cc-pic.jpg  (appearance, the wallpaper image)"
+out="$(wp /root/cc-pic.jpg)"
+check "... so is one in a folder you cannot enter"     has "$out" "         └ /root/cc-pic.jpg  (appearance, the wallpaper image)"
+out="$(wp "$UH/cc-gone.jpg")"
+check "... but not one that is gone"                   [ -z "$out" ]
+chmod -R u+rwX "$UH"
+
+
+section "the backup folder"
+# Only a folder the program makes is made private; one you already have
+# keeps its permissions (the cans and the log in it are private anyway).
+# One you cannot write to is never changed: seal stops before it reads
+# anything, open before it asks. (A home folder of its own again.)
+BF="$TMP/bf"; mkdir -p "$BF/home" "$BF/shared" "$BF/ro" "$BF/roparent"
+chmod 775 "$BF/shared"; chmod 555 "$BF/ro" "$BF/roparent"
+for c in new shared ro roparent notyet; do
+    case "$c" in new|notyet|roparent) d="$BF/$c/cans" ;; *) d="$BF/$c" ;; esac
+    printf '[general]\nbackup_dir = %s\n' "$d" > "$BF/$c.conf"
+done
+bf() { env HOME="$BF/home" XDG_CONFIG_HOME="$BF/home/.config" XDG_DATA_HOME="$BF/home/.local/share" PAGER=cat "$CC" -c "$BF/$1.conf" "${@:2}"; }
+run s out bf new seal
+check "a backup folder the program makes is private"   [ "$(stat -c %a "$BF/new/cans")" = 700 ]
+run s out bf shared seal
+check "one you already have keeps its permissions"     [ "$(stat -c %a "$BF/shared")" = 775 ]
+check "... the can in it is private"                   sh -c 'for f in "$1"/manual-*; do [ "$(stat -c %a "$f")" = 600 ] || exit 1; done' sh "$BF/shared"
+check "... and so is the log"                          [ "$(stat -c %a "$BF/shared/cinnamon-can.log")" = 600 ]
+run s out bf ro seal
+check "a folder you cannot write to: seal stops"       [ "$s" -eq 1 ]
+check "... says so, and where it is set"               sh -c 'printf "%s" "$1" | grep -qF "  ERROR  Cannot write to the backup folder $2" && printf "%s" "$1" | grep -qF "(backup_dir in "' sh "$out" "$BF/ro"
+check "... before it reads anything"                   hasnt "$out" "Reading this computer"
+check "... and leaves the folder as it was"            [ "$(stat -c %a "$BF/ro")" = 555 ]
+run s out bf roparent seal
+check "a folder that cannot be made: seal says so"     has "$out" "  ERROR  Cannot create the backup folder $BF/roparent/cans"
+check "... in its own words"                           hasnt "$out" "mkdir:"
+# open shows its summary, then stops before asking: without an autocan
+# there would be no way back.
+U="$TMP/unpack-bf"; mkdir "$U"; tar -C "$U" -xzf "$(find "$BF/new/cans" -name 'manual-*' | head -n 1)"
+mkdir -p "$U/items/sound/home/.config"; echo hi > "$U/items/sound/home/.config/cc-bf.txt"
+sed -i 's/^id[[:space:]]*=.*/id = BFO2/' "$U/manifest.txt"
+BFO="$BF/new/cans/manual-BFO2-20300101T000000+0000.tar.gz.canned"
+( cd "$U" && tar -czf "$BFO" . )
+run s out bf ro open "$BFO"
+check "open, a folder you cannot write to: the summary" has "$out" "         └ ● 1 file(s)"
+check "... then it stops"                              sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "  ERROR  Cannot write to the backup folder $3"' sh "$s" "$out" "$BF/ro"
+check "... and says why"                               has "$out" "The autocan (the way back) is saved there first; nothing was changed."
+check "... before the question"                        hasnt "$out" "needs to be confirmed"
+run s out bf notyet open "$BFO"
+check "a folder not made yet: open only checks it"     sh -c 'printf "%s" "$1" | grep -qF "needs to be confirmed" && [ ! -e "$2" ]' sh "$out" "$BF/notyet"
+# A file where the folder should be, and a log you cannot write to: said
+# plainly, before any work.
+echo "not a folder" > "$BF/afile"
+printf '[general]\nbackup_dir = %s\n' "$BF/afile" > "$BF/afile.conf"
+run s out bf afile seal
+check "backup_dir names a file: seal says so"          sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "  ERROR  The backup folder $3 is a file, not a folder"' sh "$s" "$out" "$BF/afile"
+chmod 444 "$BF/shared/cinnamon-can.log"
+run s out bf shared seal
+check "a log you cannot write to: seal stops"          sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "  ERROR  Cannot write to the log $3/cinnamon-can.log"' sh "$s" "$out" "$BF/shared"
+check "... before it reads anything"                   hasnt "$out" "Reading this computer"
+# A USB stick formatted FAT or exFAT has no permissions: setting them
+# fails there (a stand-in "chmod" fails for that folder). Cans are still
+# made and can be labelled.
+mkdir -p "$BF/shim"
+printf '#!/bin/sh\nfor a in "$@"; do case "$a" in "%s"*) echo "chmod: Operation not permitted" >&2; exit 1 ;; esac; done\nexec %s "$@"\n' \
+    "$BF/fat" "$(command -v chmod)" > "$BF/shim/chmod"
+chmod +x "$BF/shim/chmod"
+printf '[general]\nbackup_dir = %s\n' "$BF/fat/cans" > "$BF/fat.conf"
+run s out env PATH="$BF/shim:$PATH" HOME="$BF/home" XDG_CONFIG_HOME="$BF/home/.config" "$CC" -c "$BF/fat.conf" seal
+check "no permissions to set (FAT, exFAT): seal works" sh -c '[ "$1" -eq 0 ] && ls "$2"/manual-* >/dev/null' sh "$s" "$BF/fat/cans"
+check "... without the error of chmod"                 hasnt "$out" "Operation not permitted"
+FATID="$(basename "$(find "$BF/fat/cans" -name 'manual-*' | head -n 1)" | cut -d- -f2)" || true
+run s out env PATH="$BF/shim:$PATH" HOME="$BF/home" XDG_CONFIG_HOME="$BF/home/.config" "$CC" -c "$BF/fat.conf" label "$FATID" "On a stick"
+check "... and label works there too"                  sh -c '[ "$1" -eq 0 ] && printf "%s" "$2" | grep -qF "Now: On a stick"' sh "$s" "$out"
+chmod -R u+rwX "$BF"
 
 
 section "the restart question at the end of open"

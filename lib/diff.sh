@@ -15,7 +15,8 @@
 #      the "-" can that none of those items takes cannot be compared; a
 #      warning on top of the report says how many, and from which item.
 #   2. The two views are lined up: every setting and every file that
-#      differs becomes one line in a result list.
+#      differs becomes one line in a result list. What this computer
+#      could not read is taken out of it (drop_unreadable).
 #   3. The result is shown like "git diff": per item, settings first,
 #      then files. Settings a side does not have are "(default)".
 #      Optional items and your own items come last, marked as such, and
@@ -134,6 +135,8 @@ build_comparison() {
     fi
 
     compare_views "$CMP_MINUS" "$CMP_PLUS" "$CMP_RESULT" "${CMP_ITEMS[@]}"
+    # (only this computer can hold files you cannot read; see UNREADABLE)
+    [ -n "$minus_can" ] || drop_unreadable "$CMP_RESULT"
     CMP_TOTAL="$(wc -l < "$CMP_RESULT")"
     CMP_SYSTEM="$(awk -F'\t' '$2 == "system" || $3 == "(time zone)"' "$CMP_RESULT" | wc -l)"
     check_refs "$CMP_PLUS" > "$CMP_REFS"
@@ -151,8 +154,13 @@ diff_report() {
     # The two sides, with the same "-" and "+" as the lines below.
     info "Comparing:" "${C_RED}(-)${C_RESET} $CMP_MINUS_LABEL" "${C_GREEN}(+)${C_RESET} $CMP_PLUS_LABEL"
     show_version_notes "$CMP_NOTES" "$CMP_NOTES_TITLE"
-    # Two cans only: what could not be compared (see resplit_tree).
-    [ -z "$CMP_MINUS_ID" ] || show_left_out "$CC_TMP/left-out.txt" "$CMP_MINUS_ID" "$CMP_PLUS_ID"
+    # What could not be compared: on this computer, what you cannot read
+    # (see drop_unreadable); of two cans, what no item takes (resplit_tree).
+    if [ -z "$CMP_MINUS_ID" ]; then
+        show_unreadable "Not compared, since you cannot read them on this computer:"
+    else
+        show_left_out "$CC_TMP/left-out.txt" "$CMP_MINUS_ID" "$CMP_PLUS_ID"
+    fi
     render_diff
     show_missing "$CMP_REFS" "$CMP_PLUS"
     say ""
@@ -266,6 +274,30 @@ resplit_takers() {
     done
     [ "$found" -eq 1 ] || [ $# -eq 0 ] || printf '%s\n' "$1"
     return 0
+}
+
+# drop_unreadable RESULT -> takes what could not be read on this computer
+#   (UNREADABLE, see lib/collect.sh) out of the result list. This
+#   computer's side of it is unknown, so it is not compared, and "open"
+#   neither writes over it nor deletes it: the autocan could not keep a
+#   copy. A folder takes everything below it.
+drop_unreadable() {
+    [ "$(unreadable_count)" -gt 0 ] || return 0
+    awk -F'\t' -v h="$HOME/" -v u="$UNREADABLE" '
+        FILENAME == u {
+            p = substr($0, length($1) + length($2) + 3)
+            if (($2 == "file" || $2 == "folder") && index(p, h) == 1) key = "home/" substr(p, length(h) + 1)
+            else if ($2 == "system") key = "root" p
+            else next
+            if (key ~ /\/$/) inside[++n] = key; else exact[key] = 1
+            next
+        }
+        $2 == "file" || $2 == "system" {
+            if ($3 in exact) next
+            for (i = 1; i <= n; i++) if (index($3, inside[i]) == 1) next
+        }
+        { print }' "$UNREADABLE" "$1" > "$1.kept"
+    mv "$1.kept" "$1"
 }
 
 # show_left_out FILE MINUS_ID PLUS_ID -> a warning for the files of the "-"
