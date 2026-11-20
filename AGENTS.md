@@ -246,7 +246,9 @@ ready-to-paste block, and describe GitHub steps as clicks, not commands.
 Whoever types it, person or AI, every branch, commit, pull request and
 release follows `CONTRIBUTING.md` in this folder; nothing outside the
 repo is needed. Changes reach this repository as pull requests under the
-same rules.
+same rules: branches start from `dev` and their pull requests go into
+`dev`; `main` only changes with a release (a pull request from `dev`)
+or a hotfix (`CONTRIBUTING.md`, Branches).
 
 Before proposing a commit message, read the repository's actual state
 (`git status`, `git diff`, the current branch) and describe what really
