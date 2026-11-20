@@ -60,7 +60,7 @@ cmd_label() {
     part="$can.part"
     track_partial "$part"
     gzip -c "$tarball" > "$part" || die "Could not write the changed can next to it"
-    chmod --reference="$can" "$part"
+    chmod --reference="$can" "$part" 2>/dev/null || true   # (none on FAT or exFAT)
     touch -r "$can" "$part"
     trap '' INT
     mv -f "$part" "$can"

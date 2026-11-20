@@ -404,6 +404,44 @@ conf_name() {
 # backup_dir -> the folder where cans live, with ~ expanded.
 backup_dir() { expand_home "$CONF_BACKUP_DIR"; }
 
+# ensure_backup_dir [check] -> makes sure a can can be written into the
+#   backup folder, or stops with what is wrong. Only a folder the program
+#   makes itself is made private (only you: 700). A folder you already
+#   have keeps its permissions: you may share it on purpose (with a group,
+#   a sync program), and the cans and the log in it are private files
+#   anyway (600). A folder you cannot write to (one you made read-only,
+#   or someone else's) is never changed: the command stops instead.
+#   With "check", a missing folder is not made yet, only checked: "seal"
+#   and "open" check before their work, so they stop early, and a run
+#   that is cancelled leaves no empty folder behind. Any more arguments
+#   are lines added to the message, saying why the command needs it.
+ensure_backup_dir() {
+    local dir up check="${1:-}"
+    [ $# -eq 0 ] || shift
+    dir="$(backup_dir)"
+    if [ ! -e "$dir" ] && [ ! -L "$dir" ]; then
+        if [ "$check" = "check" ]; then
+            # The nearest folder above that exists must let you make it.
+            up="$(dirname -- "$dir")"
+            while [ ! -e "$up" ] && [ "$up" != "/" ] && [ "$up" != "." ]; do up="$(dirname -- "$up")"; done
+            [ -d "$up" ] && [ -w "$up" ] && [ -x "$up" ] \
+                || die "Cannot create the backup folder $(to_tilde "$dir")" "(backup_dir in $(conf_name 25))" "$@"
+            return 0
+        fi
+        mkdir -p -- "$dir" 2>/dev/null \
+            || die "Cannot create the backup folder $(to_tilde "$dir")" "(backup_dir in $(conf_name 25))" "$@"
+        # (A USB stick formatted FAT or exFAT has no permissions to set.)
+        chmod 700 -- "$dir" 2>/dev/null || true
+    fi
+    [ -d "$dir" ] || [ ! -e "$dir" ] \
+        || die "The backup folder $(to_tilde "$dir") is a file, not a folder" "(backup_dir in $(conf_name 25))" "$@"
+    [ -d "$dir" ] && [ -w "$dir" ] && [ -x "$dir" ] \
+        || die "Cannot write to the backup folder $(to_tilde "$dir")" "(backup_dir in $(conf_name 25))" "$@"
+    # The log is written right after the can; it must take a line too.
+    [ ! -e "$(log_file)" ] || [ -w "$(log_file)" ] \
+        || die "Cannot write to the log $(to_tilde "$(log_file)")" "$@"
+}
+
 
 # ---------------------------------------------------------------------------
 # 5. Facts about this computer, start-up checks

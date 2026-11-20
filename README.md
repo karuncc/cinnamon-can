@@ -572,6 +572,15 @@ backup_dir = ~/cinnamon-cans
 # name = yes | no
 ```
 
+A backup folder that cinnamon-can makes itself is private (only you can
+open it). A folder you already have keeps its permissions, for example
+one you share or sync on purpose; the cans and the log in it can only be
+read by you either way. A folder you cannot write to is never changed:
+`seal` stops before it reads anything, and `open` before it asks you,
+since it saves the autocan (your way back) there first. A USB stick
+formatted FAT or exFAT (the kind Windows uses) has no permissions at all:
+cans work there, but anyone who has the stick can read them.
+
 Several configs can live side by side: `cinnamon-can -c laptop seal` uses
 `config/laptop.conf`; `-c` (or `--config-file`) also takes a full path.
 

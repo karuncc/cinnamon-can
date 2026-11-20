@@ -101,7 +101,10 @@ LICENSE               MIT
   go into a built-in `ignore`: "Ignore lines in built-in items" in
   `CONTRIBUTING.md`.
 - **Config** `config/default.conf`: `[general] backup_dir`, `[items] name =
-  yes|no`. Required; created from `config/example.conf`.
+  yes|no`. Required; created from `config/example.conf`. The backup
+  folder goes through `ensure_backup_dir`: made private (700) only when
+  the program makes it, an existing one is never changed (cans and the
+  log are 600), and `seal`/`open` stop early when it cannot be written.
 - **Can** `{manual|autocan}-ID-YYYYMMDDTHHMMSS±HHMM.tar.gz.canned`, ID = 4
   characters from `23456789ABCDEFGHJKMNPQRSTUVWXYZ`, unique. Inside:
   `manifest.txt`, `catalog/{builtin,user}/*.item` (every item file known

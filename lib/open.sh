@@ -70,6 +70,9 @@ cmd_open() {
     fi
 
     say ""
+    # Without an autocan there is no way back, so the backup folder must
+    # take one before "yes" is even asked for.
+    ensure_backup_dir check "The autocan (the way back) is saved there first; nothing was changed."
     [ -t 0 ] || die "Command \"open\" needs to be confirmed in a terminal"
     # (Ctrl+D ends the input: read fails, which counts as "no", not as a silent stop.)
     read -r -p "${MSG_INDENT}Type \"yes\" to apply these changes: " answer || { say ""; answer=""; }
