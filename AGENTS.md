@@ -101,7 +101,9 @@ LICENSE               MIT
   go into a built-in `ignore`: "Ignore lines in built-in items" in
   `CONTRIBUTING.md`.
 - **Config** `config/default.conf`: `[general] backup_dir`, `[items] name =
-  yes|no`. Required; created from `config/example.conf`. The backup
+  yes|no`. Required; created from `config/example.conf`. `backup_dir`
+  must be `~`, `~/...` or `/...` (`backup_dir_problem`: anything else
+  would depend on the folder the command runs in). The backup
   folder goes through `ensure_backup_dir`: made private (700) only when
   the program makes it, an existing one is never changed (cans and the
   log are 600), and `seal`/`open` stop early when it cannot be written.

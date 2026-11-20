@@ -356,7 +356,7 @@ load_config() {
 
     # Every problem is collected first, so all of them are shown at once,
     # each with the line(s) it is on:   L6: shell must be yes or no ...
-    local section name lines value problems=() unknown=" "
+    local section name lines value wrong problems=() unknown=" "
     while IFS=$'\t' read -r section name lines value; do
         if [[ "$section" == !* ]]; then
             section="${section#!}"
@@ -364,8 +364,9 @@ load_config() {
         fi
         case "$section.$name" in
             general.backup_dir)
-                if [ -n "$value" ]; then CONF_BACKUP_DIR="$value"
-                else problems+=("${SUB2}L$lines: Setting \"backup_dir\" is empty"); fi ;;
+                if [ -z "$value" ]; then problems+=("${SUB2}L$lines: Setting \"backup_dir\" is empty")
+                elif wrong="$(backup_dir_problem "$value")"; then problems+=("${SUB2}L$lines: $wrong")
+                else CONF_BACKUP_DIR="$value"; fi ;;
             items.*)
                 CONF_ITEM_LINES[$name]="$lines"
                 if [ "$value" = "yes" ] || [ "$value" = "no" ]; then CONF_ITEMS[$name]="$value"
@@ -383,6 +384,45 @@ load_config() {
         esac
     done < <(parse_ini "$CONF_FILE")
     [ "${#problems[@]}" -eq 0 ] || config_problems "${problems[@]}"
+}
+
+# backup_dir_problem VALUE -> what is wrong with a backup_dir value, or
+#   nothing (and false) when it is fine. Only ~ (your home folder), ~/...
+#   and a full path (/...) can be meant: anything else would be taken
+#   from whatever folder you run the command in, so cans would end up
+#   scattered. The usual mistakes get a hint:
+#     "/my cans"    -> no quotes needed, also with spaces
+#     $HOME/cans    -> ~/cans (no variables are filled in)
+#     cans, ./cans  -> did you mean ~/cans?
+#     ~alex/cans    -> ~ stands only for your own home folder
+backup_dir_problem() {
+    local v="$1" shown bare
+    case "$v" in "~"|"~/"*|/*) return 1 ;; esac
+    to_visible shown "$v"
+    local it="Setting \"backup_dir\""
+    case "$v" in
+        [\"\']*|*[\"\'])
+            # Without the quotes it may be fine (then say so), or have a
+            # mistake of its own (then name that one).
+            bare="${v#[\"\']}"; bare="${bare%[\"\']}"
+            if [ -n "$bare" ] && ! backup_dir_problem "$bare" >/dev/null; then
+                to_visible bare "$bare"
+                printf '%s needs no quotes, also with spaces in it: write %s' "$it" "$bare"
+            elif [ -n "$bare" ]; then
+                backup_dir_problem "$bare"
+            else
+                printf '%s must start with ~/ or / (a full path), not "%s"' "$it" "$shown"
+            fi ;;
+        '$HOME'|'${HOME}')     printf '%s cannot use $HOME: write ~' "$it" ;;
+        '$HOME/'*|'${HOME}/'*) to_visible bare "~/${v#*/}"
+                               printf '%s cannot use $HOME: write %s' "$it" "$bare" ;;
+        *'$'*)                 printf '%s cannot use variables ("%s"): write the full path' "$it" "$shown" ;;
+        "~"*)                  printf '%s: ~ stands only for your own home folder (~/...), not "%s"' "$it" "$shown" ;;
+        .|..|../*|*:*|*\\*)    printf '%s must start with ~/ or / (a full path), not "%s"' "$it" "$shown" ;;
+        *)                     to_visible bare "~/${v#./}"
+                               printf '%s must start with ~/ or / (a full path), not "%s"; did you mean %s?' "$it" "$shown" "$bare" ;;
+    esac
+    return 0
 }
 
 # config_problems LINE... -> stops with every problem of the config file,

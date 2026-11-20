@@ -572,6 +572,11 @@ backup_dir = ~/cinnamon-cans
 # name = yes | no
 ```
 
+`backup_dir` is `~/...` (`~` is your home folder) or a full path that
+starts with `/`, without quotes, also when it has spaces in it. Anything
+else (`cans`, `$HOME/cans`, `"~/my cans"`) is refused with a hint, since
+it would put cans in whatever folder you happen to be in.
+
 A backup folder that cinnamon-can makes itself is private (only you can
 open it). A folder you already have keeps its permissions, for example
 one you share or sync on purpose; the cans and the log in it can only be
