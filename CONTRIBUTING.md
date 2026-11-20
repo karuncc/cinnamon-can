@@ -52,10 +52,25 @@ it. A commit that only adds such lines is a `fix`.
 
 ## Branches
 
+Two branches live on GitHub for good:
+
+    main    the released version: it only changes with a release or a hotfix
+    dev     where the next release is put together: pull requests go here
+
+`main` stays GitHub's default branch, so what a visitor sees, clones or
+downloads is always the released version.
+
+Work happens on a branch of its own, made from `dev`:
+
     type/short-kebab-name           e.g. fix/diff-empty-columns
 
 One branch per group of related work, one commit per step. `type` is one
 of the commit types below.
+
+A **hotfix** (a released version needs a fix before the next release) is
+the one exception: its `hotfix/short-kebab-name` branch is made from
+`main` and its pull request goes into `main`, for a PATCH release. Then a
+pull request from `main` into `dev` brings the fix to `dev` as well.
 
 ## Commit messages
 
@@ -101,9 +116,12 @@ Assisted-by: Claude Opus 5.5
 A pull request is written like one commit message for the whole branch,
 so it looks the same whoever opens it, a person or an AI tool.
 
-- Fork, make a `type/short-kebab-name` branch, and keep every commit in
-  the format above — AI-written commits included; that is what the
-  `Assisted-by` trailer is for.
+- Fork, make a `type/short-kebab-name` branch from `dev`, and keep every
+  commit in the format above — AI-written commits included; that is what
+  the `Assisted-by` trailer is for.
+- **Base:** `dev`. GitHub proposes `main` (the default branch): switch
+  "base" to `dev` before you create the pull request. Only a release and
+  a hotfix go into `main`.
 - Run `bash test/run-tests.sh` before opening the pull request; it must
   end with `0 failed`, and new behaviour comes with a new check.
 - **Title:** a commit summary, same rules. When the branch has several
@@ -121,7 +139,8 @@ so it looks the same whoever opens it, a person or an AI tool.
   merge commit, so every step stays in the history. Keep the message
   GitHub proposes (for a merge commit "Merge pull request #N from
   owner/branch" with the title below it): it is the same whoever merges.
-  Then delete the branch.
+  Then delete the branch, but never `dev` or `main` (GitHub offers to
+  delete `dev` after the release pull request).
 
 Example:
 
@@ -151,13 +170,22 @@ Releases are made on GitHub's Release page, not on the command line.
 
 **Steps:**
 
-1. Run the over-time noise check (`AGENTS.md`, Testing) and fix what it
-   finds first.
+1. Run the over-time noise check (`AGENTS.md`, Testing) on `dev` and fix
+   what it finds first.
 2. Bump `CC_VERSION` at the top of `cinnamon-can` in a
-   `chore: release X.Y.Z` commit, through a pull request like any change.
-3. On GitHub: Releases → "Draft a new release" → choose a tag, type the
+   `chore: release X.Y.Z` commit, on a `chore/release-X.Y.Z` branch
+   through a pull request into `dev`, like any change.
+3. A pull request from `dev` into `main`: title `chore: release X.Y.Z`,
+   the bullets of the release notes as its description. Merge it with a
+   merge commit, never a squash, so `main` keeps every commit of `dev`
+   (a squash would make the next release pull request repeat this one).
+4. On GitHub: Releases → "Draft a new release" → choose a tag, type the
    new `vX.Y.Z` and create it on `main` → title `cinnamon-can X.Y.Z` →
    the notes below → "Publish release".
+
+A hotfix release (see Branches) does steps 1, 2 and 4 with `main` in
+place of `dev`: the bump is the last commit on the hotfix branch, so its
+pull request into `main` is the release, and step 3 falls away.
 
 **Release notes** are the changelog, written for users:
 
