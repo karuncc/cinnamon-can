@@ -300,7 +300,9 @@ How to read it:
   something does (system changes too), red for what is missing here.
 
 `diff` shows long output page by page with `less`; set `PAGER` to use
-another program.
+another program. When `PAGER` is `less`, it is told to show the colours
+(`-R` is added to your `LESS` options); any other program gets the text
+without colours.
 
 ### Open a can
 

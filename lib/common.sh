@@ -824,14 +824,33 @@ ini_flat() {
 
 # show_paged FILE -> shows FILE page by page when this is a terminal: with
 #   $PAGER if you set one (like git does), otherwise "less" (which quits
-#   by itself when everything fits on one screen).
+#   by itself when everything fits on one screen). FILE has colour codes
+#   in it. "less" only shows them as colours with its -R option, so a
+#   PAGER that is less gets it through LESS, less's own setting for
+#   options: added to yours, or, like git does when you have none, the
+#   same -RFX the program uses itself. Any other pager gets the text
+#   without colour codes, so it is always readable. A PAGER that is not
+#   installed is said so, and the text is shown without it. How the pager
+#   ends (some end with an error code when you quit them) never changes
+#   what the command ends with.
 show_paged() {
+    local cmd esc=$'\e'
     if [ ! -t 1 ]; then
         cat "$1"
     elif [ -n "${PAGER:-}" ]; then
-        $PAGER "$1"
+        read -r cmd _ <<< "$PAGER"
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            warn "The pager in PAGER is not installed: $(visible "$cmd")" "The text follows without it."
+            cat "$1"
+        elif [ "${cmd##*/}" = "less" ]; then
+            if [ -n "${LESS:-}" ]; then LESS="-R $LESS" $PAGER "$1" || true
+            else LESS="-RFX" $PAGER "$1" || true; fi
+        else
+            sed "s/${esc}\[[0-9;]*m//g" "$1" > "$1.plain"
+            $PAGER "$1.plain" || true
+        fi
     elif command -v less >/dev/null 2>&1; then
-        less -RFX "$1"
+        less -RFX "$1" || true
     else
         cat "$1"
     fi

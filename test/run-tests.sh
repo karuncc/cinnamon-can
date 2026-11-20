@@ -686,6 +686,27 @@ if command -v script >/dev/null 2>&1; then
     check "list in a terminal: printed directly, no pager" hasnt "$out" "PAGED:"
     out="$(paged diff "$BASEID" TES2)" || true
     check "... while diff still uses the pager"            has "$out" "PAGED:"
+    # A PAGER of your own (stand-ins, so nothing waits for a key): less
+    # gets -R through LESS and keeps the colours; any other pager gets
+    # the text without colour codes; one that is not installed is said so.
+    # How a pager ends never changes what diff ends with (1: differences).
+    mkdir -p "$TMP/pagers"
+    printf '#!/bin/sh\necho "LESS=[$LESS] ARGS=[$*]"\nfor f; do :; done\ncat "$f"\n' > "$TMP/pagers/less"
+    printf '#!/bin/sh\ncat "$1"\nexit 3\n' > "$TMP/pagers/mypager"
+    chmod +x "$TMP/pagers/less" "$TMP/pagers/mypager"
+    pg() { script -qec "env $1 PATH=$(printf '%q' "$TMP/pagers:$PATH") $(printf '%q ' "$CC" -c "$CONF" diff "$BASEID" TES2); echo \"exit=\$?\"" /dev/null | tr -d '\r'; }
+    out="$(pg '-u LESS PAGER=less')" || true
+    check "PAGER=less: it gets -R, F and X like git gives" has "$out" "LESS=[-RFX]"
+    check "... so the colours stay"                        has "$out" $'\e['
+    check "... and diff ends with 1 (differences)"         has "$out" "exit=1"
+    out="$(pg "LESS=-i PAGER='less -S'")" || true
+    check "PAGER=less with LESS of your own: -R added"     has "$out" "LESS=[-R -i] ARGS=[-S "
+    out="$(pg 'PAGER=mypager')" || true
+    check "another pager: the text without colour codes"   sh -c 'printf "%s" "$1" | grep -qF "Summary of the comparison above" && ! printf "%s" "$1" | grep -q "$(printf "\033")"' sh "$out"
+    check "... its own exit code does not count"           has "$out" "exit=1"
+    out="$(pg 'PAGER=cc-no-such-pager' | sed 's/\x1b\[[0-9;]*m//g')" || true
+    check "a pager that is not installed: said so"         has "$out" "   WARN  The pager in PAGER is not installed: cc-no-such-pager"
+    check "... and the text follows"                       sh -c 'printf "%s" "$1" | grep -qF "Summary of the comparison above" && printf "%s" "$1" | grep -qF "exit=1"' sh "$out"
 else
     printf '  skip "script" is missing: what only shows in a terminal is not tried\n'
 fi
