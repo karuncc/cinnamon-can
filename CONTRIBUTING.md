@@ -16,14 +16,18 @@ never put a real machine or user name in a repo file.
 
 ## Testing
 
-Run the test script after every change:
+Run the tests after every change:
 
     bash test/run-tests.sh
 
-It is safe on a normal computer and cleans up after itself (details in
-the script's header). New behaviour should come with a new check. The
-parts it cannot cover (really applying a can, sudo, the restart) follow
-the sandbox rules in `AGENTS.md`.
+The checks live in `test/NN-topic.sh`, one file per part of the program;
+the command runs them all at the same time and ends with the total.
+`bash test/run-tests.sh pager` runs only the files with that word in
+their name. The tests are safe on a normal computer and clean up after
+themselves, also after Ctrl+C (details in the header of
+`test/run-tests.sh`). New behaviour should come with a new check. The
+parts they cannot cover (really applying a can, sudo, the restart)
+follow the sandbox rules in `AGENTS.md`.
 
 ## Ignore lines in built-in items
 
@@ -123,7 +127,8 @@ so it looks the same whoever opens it, a person or an AI tool.
   "base" to `dev` before you create the pull request. Only a release and
   a hotfix go into `main`.
 - Run `bash test/run-tests.sh` before opening the pull request; it must
-  end with `0 failed`, and new behaviour comes with a new check.
+  end with `All N checks passed`, and new behaviour comes with a new
+  check.
 - **Title:** a commit summary, same rules. When the branch has several
   commits, use the type and summary of the main change (`feat` before
   `fix`).
