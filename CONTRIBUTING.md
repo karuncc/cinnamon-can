@@ -110,11 +110,12 @@ so it looks the same whoever opens it, a person or an AI tool.
   commits, use the type and summary of the main change (`feat` before
   `fix`).
 - **Description:** written like a commit body: short `- ` bullets saying
-  what the whole branch changes, at an overview level. When an AI wrote
-  most of the branch, end with `Assisted-by: <model name>` after a blank
-  line, as in a commit. Nothing else: no headings, checklists or test
-  output. For a branch with one commit, using that commit's summary and
-  body as the title and description is recommended.
+  what the whole branch changes, at an overview level, each bullet on
+  one line (GitHub shows every line break of a description as it is).
+  When an AI wrote most of the branch, end with `Assisted-by: <model
+  name>` after a blank line, as in a commit. Nothing else: no headings,
+  checklists or test output. For a branch with one commit, using that
+  commit's summary and body as the title and description is recommended.
 - **Merging:** on GitHub, as a merge commit or a squash — never a
   rebase. A branch with several commits, one per step, is merged with a
   merge commit, so every step stays in the history. Keep the message
@@ -129,14 +130,10 @@ Title:
 feat: let items ignore settings that programs write themselves
 
 Description:
-- accept settings in an item's `ignore` (also `*/name`, `*/name*`,
-  `*/*name`); they are kept and restored, but never counted in `diff`
-- use this computer's `ignore` lines as well as the can's, so older
-  cans are quieted too
-- ignore window places, last-used values and version notes in `nemo`,
-  `keyboard`, `other` and `app-settings`
-- stop keeping private histories (Run dialog, searches, Bluetooth
-  devices)
+- accept settings in an item's `ignore` (also `*/name`, `*/name*`, `*/*name`); they are kept and restored, but never counted in `diff`
+- use this computer's `ignore` lines as well as the can's, so older cans are quieted too
+- ignore window places, last-used values and version notes in `nemo`, `keyboard`, `other` and `app-settings`
+- stop keeping private histories (Run dialog, searches, Bluetooth devices)
 
 Assisted-by: Claude Opus 5.5
 ```
@@ -169,6 +166,9 @@ Releases are made on GitHub's Release page, not on the command line.
   can now do or what behaves differently, new things first, then fixes;
 - a closing sentence only when users must know or do something (read
   the limits, seal a new can ...);
+- the sentence, each bullet and the closing sentence on one line each,
+  with a blank line between the parts: GitHub shows every line break of
+  the notes as it is, so a wrapped bullet would be broken on the page;
 - no `Assisted-by`: every commit already carries its own.
 
 Example, the first release:
@@ -180,15 +180,10 @@ cinnamon-can 1.0.0
 Notes:
 First release.
 
-- `seal`, `list`, `peek`, `diff` and `open` snapshot a Linux Mint 22.x
-  Cinnamon desktop and put it back, on this computer or on a new one
-- one small item file per part of the desktop decides what is kept;
-  add your own items and switch any item on or off in the config
-- `open` shows the full diff first, asks for `yes`, saves an undo
-  autocan, then restarts; system files are only written with sudo
-- cans carry their own item catalog, the wallpaper image, language,
-  time zone and a software list, and `peek`/`diff` tell you what the
-  target computer is missing (never installed for you)
+- `seal`, `list`, `peek`, `diff` and `open` snapshot a Linux Mint 22.x Cinnamon desktop and put it back, on this computer or on a new one
+- one small item file per part of the desktop decides what is kept; add your own items and switch any item on or off in the config
+- `open` shows the full diff first, asks for `yes`, saves an undo autocan, then restarts; system files are only written with sudo
+- cans carry their own item catalog, the wallpaper image, language, time zone and a software list, and `peek`/`diff` tell you what the target computer is missing (never installed for you)
 - `test/run-tests.sh` runs 64 checks without touching the computer
 
 See `README.md` for scope and limitations — cans are not encrypted.
