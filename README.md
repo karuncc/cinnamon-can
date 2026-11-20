@@ -405,6 +405,13 @@ System files are never deleted.
 **Undo:** `cinnamon-can open <the autocan's ID>` — shown at the end of every
 `open`, and found in `list` / the log.
 
+**A can from someone else** brings its own item files, and they decide
+what `open` does: which files in your home it writes and deletes, and,
+with sudo, which system files it writes. Some of those files start
+programs later (startup apps, Nemo scripts, `.bashrc`, a crontab). Open
+only cans you made yourself or got from someone you trust, and run
+`diff` first to see every change.
+
 ### Change a label or delete a can
 
 ```
