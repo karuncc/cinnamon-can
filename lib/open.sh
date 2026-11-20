@@ -19,8 +19,9 @@
 #      never deleted. Ctrl+C is switched off while this runs (a few
 #      seconds), so the computer is never left half old, half new.
 #   5. Write the log, show how to undo, and ask whether to restart now:
-#      "yes" restarts, anything else (or Ctrl+C) leaves it to you. Either
-#      way "open" ends with 1 when some changes could not be made.
+#      "yes" restarts after a 10-second countdown, anything else (or
+#      Ctrl+C, also during the countdown) leaves it to you. Either way
+#      "open" ends with 1 when some changes could not be made.
 #   Ctrl+C before step 4 stops with "Cancelled; nothing was changed."
 
 # shellcheck source=lib/diff.sh
@@ -278,22 +279,36 @@ reload_input_methods() {
 
 # Ask whether to restart now. After a restart the desktop reads every
 # setting fresh (Timeshift restarts after a restore for the same reason),
-# but other open windows may hold unsaved work, so the choice is yours:
-# only "yes" restarts. Anything else, the end of the input (Ctrl+D) or
-# Ctrl+C leaves the restart to you, with a reminder how to do it.
+# but a restart closes every open program without asking to save, so the
+# choice is yours and the question says so: only "yes" restarts, and only
+# after a countdown of RESTART_WAIT seconds, so you can still change your
+# mind. Anything else, the end of the input (Ctrl+D), or Ctrl+C at the
+# question or during the countdown, leaves the restart to you, with a
+# reminder how to do it.
 #   ask_restart STATUS -> STATUS is what "open" ends with, whatever the
 #   answer: 1 when some changes could not be made, else 0. (Ctrl+C here
 #   is a "no", not a stop: the writing is already finished.)
+RESTART_WAIT=10
 ask_restart() {
-    local answer status="${1:-0}"
+    local answer status="${1:-0}" n
     trap 'say ""; not_restarted; exit '"$status" INT
-    info "The desktop shows some changes only after a restart."
+    info "The desktop shows some changes only after a restart." \
+         "Restarting closes every open program without asking to save."
     read -r -p "${MSG_INDENT}Type \"yes\" to restart now: " answer || { say ""; answer=""; }
-    trap '' INT
     if [ "$answer" = "yes" ]; then
+        # The numbers go on one line, one each second; Ctrl+C stops it.
+        info "Restarting in $RESTART_WAIT seconds; press Ctrl+C to stop."
+        printf '%s' "$MSG_INDENT"
+        for (( n = RESTART_WAIT; n > 0; n-- )); do
+            printf '%s ' "$n"
+            sleep 1
+        done
+        printf '\n'
+        trap '' INT
         info "Restarting ..."
         systemctl reboot || die "Could not restart; please restart yourself"
     else
+        trap '' INT
         not_restarted
     fi
     return "$status"

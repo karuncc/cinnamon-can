@@ -349,9 +349,11 @@ cinnamon-can open K7Q2
    few seconds), so the computer is never left half done.
 5. Prints how to undo (under an `UNDO` badge), writes the log, and asks
    whether to **restart the computer** now: the desktop shows some
-   changes only after a restart. Type `yes` to restart; anything else, or
-   Ctrl+C, leaves it to you (logging out and in is enough for most
-   changes).
+   changes only after a restart. A restart closes every open program
+   without asking to save, so save your work first. Type `yes` to
+   restart: it counts down 10 seconds, and Ctrl+C during that time stops
+   it. Anything else, or Ctrl+C at the question, leaves it to you
+   (logging out and in is enough for most changes).
 
 ```
    INFO  Applying changes from the can [K7Q2] to this computer ...
@@ -366,6 +368,7 @@ cinnamon-can open K7Q2
        $ cinnamon-can open R4T8
 
    INFO  The desktop shows some changes only after a restart.
+         Restarting closes every open program without asking to save.
          Type "yes" to restart now: no
    WARN  Not restarted.
          Please restart (or log out and in) yourself soon. To restart, run:
@@ -533,7 +536,8 @@ built-in file is a good start).
    `cinnamon-can diff ID` and install what it still lists as not installed
    (apps, fonts, themes) — their settings then apply right away.
 4. `cinnamon-can open ID` — with sudo and the full path (see "Open a can")
-   to include the system files. Type `yes` when it asks to restart.
+   to include the system files. Save your work in other programs, then
+   type `yes` when it asks to restart.
 5. Things cinnamon-can does not handle: printers, Wi-Fi and VPN
    connections (with their passwords), Bluetooth pairing, online accounts,
    browser data, SSH/GPG keys, user groups, firewall, drivers. A Web
@@ -572,8 +576,8 @@ something failed, `diff` found differences, or you did not confirm `open`
 or `delete`;
 `2` for an unknown command; `130` when you stopped it with Ctrl+C (it
 says what that left behind). The restart question at the end of `open`
-does not change its code, whatever you answer: Ctrl+C there counts as
-"no".
+does not change its code, whatever you answer: Ctrl+C there, or during
+the countdown after `yes`, counts as "no".
 
 ## Inside a can
 
