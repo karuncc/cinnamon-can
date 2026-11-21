@@ -184,9 +184,9 @@ diff_report() {
 #   find an item (the catch-alls), and what an item excludes now is left
 #   out on purpose, just as when this computer is read.
 resplit_tree() {
-    local src="$1" out="$2" plus="$3" n f rel owner kind from split="$CC_TMP/resplit"
+    local src="$1" out="$2" plus="$3" n f p rel owner kind from split="$CC_TMP/resplit"
     local left="$CC_TMP/left-out.txt"
-    local -a takers
+    local -a takers ws
     rm -rf "$out" "$split"; mkdir -p "$out/items" "$split"; : > "$left"
 
     # Settings: all of them together, sorted again (lib/dconf.awk).
@@ -233,7 +233,8 @@ resplit_tree() {
         rel="${f#"$src"/items/*/root}"
         takers=()
         for n in "${ITEM_NAMES[@]}"; do
-            [[ $'\n'"$(split_words "${ITEM_SYSTEM[$n]:-}")"$'\n' == *$'\n'"$rel"$'\n'* ]] && takers+=("$n")
+            words ws "${ITEM_SYSTEM[$n]:-}"
+            for p in "${ws[@]+"${ws[@]}"}"; do [ "$p" != "$rel" ] || { takers+=("$n"); break; }; done
         done
         if [ "${#takers[@]}" -eq 0 ]; then
             n="${f#"$src"/items/}"
@@ -480,12 +481,14 @@ same_file() {
 #   file lines in the "ignore" fields of the items (see lib/items.sh).
 write_ignore_rules() {
     local n p file
+    local -a ign
     for n in "$@"; do
-        while IFS= read -r p; do
+        ignore_list ign "$n"
+        for p in "${ign[@]+"${ign[@]}"}"; do
             [[ "$p" == "~/"* ]] || continue        # settings: see flat_settings
             file="${p%%:*}"
             printf '%s\thome/%s\t%s\n' "$n" "${file#\~/}" "${p#*:}"
-        done < <(ignore_words "$n")
+        done
     done > "$CC_TMP/ignore-rules.txt"
 }
 

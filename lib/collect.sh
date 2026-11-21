@@ -73,6 +73,7 @@ collect_dconf() {
 
 collect_files() {
     local out="$1" n p abs m rel; shift
+    local -a ws
     local cand="$CC_TMP/file-candidates.txt" own="$CC_TMP/file-owners.txt"
     local list="$CC_TMP/file-list.txt" got="$CC_TMP/file-got.txt"
     : > "$cand"; : > "$CC_TMP/closed-folders.txt"
@@ -80,8 +81,9 @@ collect_files() {
 
     # Everything that exists for the items asked for.
     for n in "$@"; do
-        while IFS= read -r p; do
-            abs="$(expand_home "$p")"
+        words ws "${ITEM_FILES[$n]}"
+        for p in "${ws[@]+"${ws[@]}"}"; do
+            abs="$HOME/${p#\~/}"            # (every entry starts with ~/)
             if [[ "$abs" == *[*?]* ]]; then
                 # (a folder that cannot be opened simply matches nothing)
                 closed_glob_folder "$abs" "$n"
@@ -89,7 +91,7 @@ collect_files() {
             else
                 add_candidate "$abs" "$p" "$n"
             fi
-        done < <(split_words "${ITEM_FILES[$n]}")
+        done
     done
     sort -u -o "$cand" "$cand"
 
@@ -203,9 +205,11 @@ note_closed_folders() {
 
 collect_system() {
     local out="$1" n="$2" p
-    while IFS= read -r p; do
+    local -a ws
+    words ws "${ITEM_SYSTEM[$n]}"
+    for p in "${ws[@]+"${ws[@]}"}"; do
         if [ -f "$p" ] && [ -r "$p" ]; then
-            mkdir -p "$out/items/$n/root$(dirname "$p")"
+            mkdir -p "$out/items/$n/root${p%/*}"
             cp -p "$p" "$out/items/$n/root$p"
         elif [ -e "$p" ]; then
             printf '%s\tsystem\t%s\n' "$n" "$p" >> "$UNREADABLE"
@@ -216,7 +220,7 @@ collect_system() {
             [ ! -s "$CC_TMP/closed-folders.txt" ] \
                 || awk -F'\t' -v OFS='\t' '{ print $1, "system", $2 }' "$CC_TMP/closed-folders.txt" >> "$UNREADABLE"
         fi
-    done < <(split_words "${ITEM_SYSTEM[$n]}")
+    done
 }
 
 # --- Special sources ---------------------------------------------------------
@@ -339,10 +343,18 @@ write_software_list() {
     fi
 
     echo "[local-programs]"
-    for f in /usr/local/bin/*; do
-        [ -f "$f" ] || continue
-        dpkg -S "$f" >/dev/null 2>&1 || printf '%s\n' "$f"
-    done
+    local -a local_bin=()
+    for f in /usr/local/bin/*; do [ -f "$f" ] && local_bin+=("$f"); done
+    if [ "${#local_bin[@]}" -gt 0 ]; then
+        # One question to dpkg for all of them (it is slow to start, about
+        # half a second each time): a file no package owns is a program
+        # you put there yourself. dpkg answers "package: /path" for each
+        # file a package owns.
+        { dpkg -S "${local_bin[@]}" 2>/dev/null || true; } | sed -n 's/^[^:]*: //p' > "$CC_TMP/software-owned.txt"
+        printf '%s\n' "${local_bin[@]}" | awk -v owned="$CC_TMP/software-owned.txt" '
+            BEGIN { while ((getline l < owned) > 0) mine[l] = 1 }
+            !($0 in mine)'
+    fi
 
     echo "[sources]"
     for f in /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do

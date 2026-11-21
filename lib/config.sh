@@ -61,19 +61,35 @@ parse_ini() {
     ' "$1"
 }
 
-# split_words TEXT -> one word per line. Words are separated by spaces; a
-#   word in double quotes may contain spaces:  "My Notes/" -> My Notes/
-split_words() {
-    printf '%s\n' "$1" | awk '{
-        w = ""; q = 0
-        for (i = 1; i <= length($0); i++) {
-            c = substr($0, i, 1)
-            if (c == "\"") { q = !q; continue }
-            if (!q && (c == " " || c == "\t")) { if (w != "") print w; w = ""; continue }
-            w = w c
-        }
-        if (w != "") print w
-    }'
+# words VAR TEXT -> sets the array VAR to the words of TEXT. Words are
+#   separated by spaces; a word in double quotes may contain spaces:
+#   "My Notes/" -> My Notes/
+#   It all happens inside bash, without starting another program: the
+#   item files are read this way hundreds of times per command.
+words() {
+    local -n _words="$1"
+    local _s="$2" _w="" _c _q=0 _i
+    _words=()
+    # Without quotes, bash splits it by itself (and keeps * and ? as
+    # they are).
+    if [[ "$_s" != *'"'* ]]; then
+        read -r -d '' -a _words <<< "$_s" || true
+        return 0
+    fi
+    for (( _i = 0; _i < ${#_s}; _i++ )); do
+        _c="${_s:_i:1}"
+        case "$_c" in
+            '"') _q=$(( !_q )) ;;
+            ' '|$'\t')
+                if [ "$_q" -eq 1 ]; then _w+="$_c"
+                else [ -z "$_w" ] || _words+=("$_w"); _w=""; fi ;;
+            $'\n')
+                # (a new line ends a word, and an open quote)
+                [ -z "$_w" ] || _words+=("$_w"); _w=""; _q=0 ;;
+            *) _w+="$_c" ;;
+        esac
+    done
+    [ -z "$_w" ] || _words+=("$_w")
 }
 
 # ini_flat FILE [ITEM] -> a "dconf load" file as one setting per line:
