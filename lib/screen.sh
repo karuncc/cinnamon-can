@@ -159,6 +159,7 @@ screen_width() {
 #   only its end with "…" in front (for long paths: the file name stays).
 #   Without a terminal the text is never cut, so nothing is lost in a file.
 fit_end() {
+    local LC_ALL=C.UTF-8            # (letters, not bytes: see fit_start)
     if [ -n "$C_RESET" ] && [ "${#1}" -gt "$2" ]; then printf '…%s' "${1: -$(( $2 - 1 ))}"
     else printf '%s' "$1"; fi
 }

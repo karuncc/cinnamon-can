@@ -13,35 +13,41 @@
 # Something the tree itself brings along (a theme in ~/.themes, an applet
 # in ~/.local/share/cinnamon ...) does not count as missing.
 
+# Helpers of check_refs. They read the tree it checks (REFS_TREE) and the
+# tree's settings, one per line (REFS_FLAT), which check_refs sets first.
+REFS_TREE="" REFS_FLAT=""
+
+# refs_setting PATH -> the value of that setting in the tree, without
+#   quotes or a type prefix such as "@as " ('' if unset).
+refs_setting() { awk -F'\t' -v p="$1" '$2 == p { v = $3; sub(/^@[a-z]+ /, "", v); gsub(/^'"'"'|'"'"'$/, "", v); print v; exit }' "$REFS_FLAT"; }
+# refs_setting_item PATH -> the item that holds that setting.
+refs_setting_item() { awk -F'\t' -v p="$1" '$2 == p { print $1; exit }' "$REFS_FLAT"; }
+# refs_item_of FILE -> the item a file of the tree belongs to.
+refs_item_of() { local n="${1#"$REFS_TREE"/items/}"; printf '%s' "${n%%/*}"; }
+# refs_in_tree REL -> success if the tree brings home/REL along.
+refs_in_tree() { compgen -G "$REFS_TREE/items/*/home/$1" >/dev/null; }
+
 check_refs() {
-    local tree="$1" flat="$CC_TMP/refs-settings.txt" v x f n
-    # setting PATH -> its value in the tree, without quotes or a type
-    #   prefix such as "@as " ('' if unset).
-    setting() { awk -F'\t' -v p="$1" '$2 == p { v = $3; sub(/^@[a-z]+ /, "", v); gsub(/^'"'"'|'"'"'$/, "", v); print v; exit }' "$flat"; }
-    # setting_item PATH -> the item that holds that setting.
-    setting_item() { awk -F'\t' -v p="$1" '$2 == p { print $1; exit }' "$flat"; }
-    # item_of FILE -> the item a file of the tree belongs to.
-    item_of() { n="${1#"$tree"/items/}"; printf '%s' "${n%%/*}"; }
-    # in_tree REL -> success if the tree brings home/REL along.
-    in_tree() { compgen -G "$tree/items/*/home/$1" >/dev/null; }
+    local tree="$1" flat="$CC_TMP/refs-settings.txt" v x f
+    REFS_TREE="$tree" REFS_FLAT="$flat"
 
     : > "$flat"
-    for f in "$tree"/items/*/dconf.ini; do [ -f "$f" ] && ini_flat "$f" "$(item_of "$f")" >> "$flat"; done
+    for f in "$tree"/items/*/dconf.ini; do [ -f "$f" ] && ini_flat "$f" "$(refs_item_of "$f")" >> "$flat"; done
 
     # --- Themes, icons, cursor ---
     for x in /org/cinnamon/desktop/interface/gtk-theme /org/cinnamon/theme/name /org/gnome/desktop/wm/preferences/theme; do
-        v="$(setting "$x")"
+        v="$(refs_setting "$x")"
         [ -n "$v" ] || continue
         [ -d "$HOME/.themes/$v" ] || [ -d "$HOME/.local/share/themes/$v" ] || [ -d "/usr/share/themes/$v" ] \
-            || in_tree ".themes/$v" || in_tree ".local/share/themes/$v" \
-            || printf 'theme\t%s\t%s\n' "$v" "$(setting_item "$x")"
+            || refs_in_tree ".themes/$v" || refs_in_tree ".local/share/themes/$v" \
+            || printf 'theme\t%s\t%s\n' "$v" "$(refs_setting_item "$x")"
     done
     for x in icon-theme cursor-theme; do
-        v="$(setting "/org/cinnamon/desktop/interface/$x")"
+        v="$(refs_setting "/org/cinnamon/desktop/interface/$x")"
         [ -n "$v" ] || continue
         [ -d "$HOME/.icons/$v" ] || [ -d "$HOME/.local/share/icons/$v" ] || [ -d "/usr/share/icons/$v" ] \
-            || in_tree ".icons/$v" || in_tree ".local/share/icons/$v" \
-            || printf '%s\t%s\t%s\n' "${x%-theme}" "$v" "$(setting_item "/org/cinnamon/desktop/interface/$x")"
+            || refs_in_tree ".icons/$v" || refs_in_tree ".local/share/icons/$v" \
+            || printf '%s\t%s\t%s\n' "${x%-theme}" "$v" "$(refs_setting_item "/org/cinnamon/desktop/interface/$x")"
     done
 
     # --- Fonts ---
@@ -52,16 +58,16 @@ check_refs() {
     } | sed 's/^ *//; s/ *$//' | sort -u > "$families"
     for x in /org/cinnamon/desktop/interface/font-name /org/gnome/desktop/interface/document-font-name \
              /org/gnome/desktop/interface/monospace-font-name /org/cinnamon/desktop/wm/preferences/titlebar-font; do
-        v="$(setting "$x")"
+        v="$(refs_setting "$x")"
         [ -n "$v" ] || continue
-        font_known "$v" "$families" || printf 'font\t%s\t%s\n' "$v" "$(setting_item "$x")"
+        font_known "$v" "$families" || printf 'font\t%s\t%s\n' "$v" "$(refs_setting_item "$x")"
     done
 
     # --- Applets, desklets, extensions ---
     local kind uuid where
     for kind in applet desklet extension; do
-        where="$(setting_item "/org/cinnamon/enabled-${kind}s")"
-        setting "/org/cinnamon/enabled-${kind}s" | tr -d "[]' " | tr ',' '\n' | while IFS= read -r x; do
+        where="$(refs_setting_item "/org/cinnamon/enabled-${kind}s")"
+        refs_setting "/org/cinnamon/enabled-${kind}s" | tr -d "[]' " | tr ',' '\n' | while IFS= read -r x; do
             [ -n "$x" ] || continue
             case "$kind" in
                 applet)    uuid="$(printf '%s' "$x" | cut -d: -f4)" ;;
@@ -70,29 +76,29 @@ check_refs() {
             esac
             [ -n "$uuid" ] || continue
             [ -d "/usr/share/cinnamon/${kind}s/$uuid" ] || [ -d "$HOME/.local/share/cinnamon/${kind}s/$uuid" ] \
-                || in_tree ".local/share/cinnamon/${kind}s/$uuid" || printf '%s\t%s\t%s\n' "$kind" "$uuid" "$where"
+                || refs_in_tree ".local/share/cinnamon/${kind}s/$uuid" || printf '%s\t%s\t%s\n' "$kind" "$uuid" "$where"
         done
     done
 
     # --- Apps the panel, the menu and the default apps point at ---
     {
-        where="$(setting_item /org/cinnamon/favorite-apps)"
-        setting /org/cinnamon/favorite-apps | tr -d "[]' " | tr ',' '\n' | sed "s/\$/\t$where/"
+        where="$(refs_setting_item /org/cinnamon/favorite-apps)"
+        refs_setting /org/cinnamon/favorite-apps | tr -d "[]' " | tr ',' '\n' | sed "s/\$/\t$where/"
         for f in "$tree"/items/*/home/.config/cinnamon/spices/grouped-window-list@cinnamon.org/*.json; do
-            [ -f "$f" ] && json_list "$f" pinned-apps | sed "s/\$/\t$(item_of "$f")/"
+            [ -f "$f" ] && json_list "$f" pinned-apps | sed "s/\$/\t$(refs_item_of "$f")/"
         done
         for f in "$tree"/items/*/home/.config/cinnamon/spices/panel-launchers@cinnamon.org/*.json; do
-            [ -f "$f" ] && json_list "$f" launcherList | sed "s/\$/\t$(item_of "$f")/"
+            [ -f "$f" ] && json_list "$f" launcherList | sed "s/\$/\t$(refs_item_of "$f")/"
         done
         for f in "$tree"/items/*/home/.config/mimeapps.list; do
-            [ -f "$f" ] && awk -F= -v i="$(item_of "$f")" '/^\[/ { on = ($0 == "[Default Applications]"); next }
+            [ -f "$f" ] && awk -F= -v i="$(refs_item_of "$f")" '/^\[/ { on = ($0 == "[Default Applications]"); next }
                 on && NF == 2 { n = split($2, a, ";"); for (k = 1; k <= n; k++) if (a[k] != "") print a[k] "\t" i }' "$f"
         done
         true
     } | sort -u -t$'\t' -k1,1 | while IFS=$'\t' read -r x v; do
         x="${x%:flatpak}"
         [ -n "$x" ] || continue
-        desktop_file_exists "$x" || in_tree ".local/share/applications/$x" || printf 'app\t%s\t%s\n' "$x" "$v"
+        desktop_file_exists "$x" || refs_in_tree ".local/share/applications/$x" || printf 'app\t%s\t%s\n' "$x" "$v"
     done
 
     # --- Input method ---
@@ -100,9 +106,9 @@ check_refs() {
         [ -f "$f" ] || continue
         v="$(awk '/^run_im/ { print $2; exit }' "$f")"
         case "$v" in
-            fcitx)  command -v fcitx >/dev/null 2>&1       || printf 'input\tfcitx\t%s\n' "$(item_of "$f")" ;;
-            fcitx5) command -v fcitx5 >/dev/null 2>&1      || printf 'input\tfcitx5\t%s\n' "$(item_of "$f")" ;;
-            ibus)   command -v ibus-daemon >/dev/null 2>&1 || printf 'input\tibus\t%s\n' "$(item_of "$f")" ;;
+            fcitx)  command -v fcitx >/dev/null 2>&1       || printf 'input\tfcitx\t%s\n' "$(refs_item_of "$f")" ;;
+            fcitx5) command -v fcitx5 >/dev/null 2>&1      || printf 'input\tfcitx5\t%s\n' "$(refs_item_of "$f")" ;;
+            ibus)   command -v ibus-daemon >/dev/null 2>&1 || printf 'input\tibus\t%s\n' "$(refs_item_of "$f")" ;;
         esac
     done
 
@@ -111,10 +117,10 @@ check_refs() {
     locale -a 2>/dev/null | norm_locale | sort -u > "$have_locales"
     {
         for f in "$tree"/items/*/language.txt; do
-            [ -f "$f" ] && cut -d= -f2 "$f" | sed "s/\$/\t$(item_of "$f")/"
+            [ -f "$f" ] && cut -d= -f2 "$f" | sed "s/\$/\t$(refs_item_of "$f")/"
         done
         for f in "$tree"/items/*/root/etc/default/locale; do
-            [ -f "$f" ] && cut -d= -f2 "$f" | tr -d '"' | sed "s/\$/\t$(item_of "$f")/"
+            [ -f "$f" ] && cut -d= -f2 "$f" | tr -d '"' | sed "s/\$/\t$(refs_item_of "$f")/"
         done
         true
     } | while IFS=$'\t' read -r v x; do
@@ -123,15 +129,15 @@ check_refs() {
     done | sort -u -t$'\t' -k2,2
 
     # --- Sound theme ---
-    v="$(setting /org/gnome/desktop/sound/theme-name)"
+    v="$(refs_setting /org/gnome/desktop/sound/theme-name)"
     if [ -n "$v" ] && [ ! -d "/usr/share/sounds/$v" ] && [ ! -d "$HOME/.local/share/sounds/$v" ]; then
-        printf 'sound\t%s\t%s\n' "$v" "$(setting_item /org/gnome/desktop/sound/theme-name)"
+        printf 'sound\t%s\t%s\n' "$v" "$(refs_setting_item /org/gnome/desktop/sound/theme-name)"
     fi
 
     # --- Software ---
     for f in "$tree"/items/*/software.txt; do
         [ -f "$f" ] || continue
-        where="$(item_of "$f")"
+        where="$(refs_item_of "$f")"
         local installed="$CC_TMP/refs-dpkg.txt" flatpaks="$CC_TMP/refs-flatpak.txt"
         dpkg-query -W -f='${Package} ${Status}\n' 2>/dev/null | awk '$NF == "installed" { print $1 }' | sort -u > "$installed"
         { flatpak list --app --columns=application 2>/dev/null || true; } | sort -u > "$flatpaks"

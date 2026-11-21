@@ -41,7 +41,7 @@ cmd_diff() {
 }
 
 # Results of build_comparison, used by "diff" and "open":
-CMP_MINUS="" CMP_PLUS="" CMP_RESULT="" CMP_REFS="" CMP_TOTAL=0 CMP_SYSTEM=0
+CMP_MINUS="" CMP_PLUS="" CMP_RESULT="" CMP_REFS="" CMP_TOTAL=0
 CMP_PLUS_ID="" CMP_MINUS_ID=""   # the minus ID only when two cans are compared
 CMP_MINUS_LABEL="" CMP_PLUS_LABEL="" CMP_NOTES="" CMP_NOTES_TITLE=""
 CMP_PLUS_REF="" CMP_MINUS_REF=""   # how a command to copy names each can (can_ref)
@@ -138,8 +138,8 @@ build_comparison() {
     # (only this computer can hold files you cannot read; see UNREADABLE)
     [ -n "$minus_can" ] || drop_unreadable "$CMP_RESULT"
     CMP_TOTAL="$(wc -l < "$CMP_RESULT")"
-    CMP_SYSTEM="$(awk -F'\t' '$2 == "system" || $3 == "(time zone)"' "$CMP_RESULT" | wc -l)"
     check_refs "$CMP_PLUS" > "$CMP_REFS"
+    count_differences
 
     # Kept for the report (diff_report), which is written separately.
     CMP_MINUS_LABEL="$minus_label" CMP_PLUS_LABEL="$plus_label"
@@ -657,7 +657,6 @@ diff_body() {
 #   green = nothing, yellow = differs (system changes: the colour of
 #   [SUDO REQUIRED], also yellow), red = missing.
 summary_line() {
-    count_differences
     info "Summary of the comparison above:" \
         "${SUB}$(status_dot "$CNT_SETTINGS" "$C_YELLOW") $CNT_SETTINGS setting(s) differ" \
         "${SUB}$(status_dot "$CNT_FILES" "$C_YELLOW") $CNT_FILES file(s) differ" \
@@ -666,15 +665,17 @@ summary_line() {
 }
 
 # count_differences -> CNT_SETTINGS, CNT_FILES, CNT_SYSTEM and CNT_MISSING:
-#   how many lines of each kind the comparison found ("diff" and "open"
-#   count the same way).
+#   how many lines of each kind the comparison found. build_comparison
+#   counts once; "diff" and "open" both show these numbers.
 CNT_SETTINGS=0 CNT_FILES=0 CNT_SYSTEM=0 CNT_MISSING=0
 count_differences() {
     # The time zone needs sudo, so it counts as a system change here --
     # the same way its SUDO REQUIRED mark and the "open" messages do.
-    CNT_SETTINGS="$(awk -F'\t' '$2 == "setting" && $3 != "(time zone)"' "$CMP_RESULT" | wc -l)"
-    CNT_FILES="$(awk -F'\t' '$2 == "file" || $2 == "crontab"' "$CMP_RESULT" | wc -l)"
-    CNT_SYSTEM="$(awk -F'\t' '$2 == "system" || $3 == "(time zone)"' "$CMP_RESULT" | wc -l)"
+    read -r CNT_SETTINGS CNT_FILES CNT_SYSTEM < <(awk -F'\t' '
+        $2 == "setting" && $3 != "(time zone)" { s++ }
+        $2 == "file" || $2 == "crontab"        { f++ }
+        $2 == "system" || $3 == "(time zone)"  { y++ }
+        END { print s + 0, f + 0, y + 0 }' "$CMP_RESULT")
     CNT_MISSING="$(wc -l < "$CMP_REFS")"
 }
 

@@ -115,7 +115,7 @@ startup_checks() {
         problems+=("${SUB}This is Linux Mint ${SYS_EDITION:-?}; cinnamon-can only supports the Cinnamon edition")
     fi
     [ -n "$SYS_CINNAMON" ] || problems+=("${SUB}Could not find Cinnamon (\"cinnamon --version\" failed)")
-    for tool in dconf tar gzip awk diff cmp find xargs; do
+    for tool in dconf tar gzip awk diff cmp find fc-list busctl timedatectl dpkg-query apt-mark; do
         command -v "$tool" >/dev/null 2>&1 || problems+=("${SUB}Required program \"$tool\" is missing")
     done
     [ "${#problems[@]}" -eq 0 ] || die "This computer cannot run cinnamon-can:" "${problems[@]}"
