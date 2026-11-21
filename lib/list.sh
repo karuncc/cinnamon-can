@@ -202,8 +202,10 @@ counted() { if [ "$1" -eq 1 ]; then printf '1 %s' "$2"; else printf '%s %ss' "$1
 # show_software TREE -> the full software list of a tree, one row per
 #   kind. Long lists go on over more lines, under the first word.
 show_software() {
-    local f
-    f="$( { find "$1/items" -name software.txt 2>/dev/null || true; } | head -n 1)"
+    local f="" g
+    # Where seal keeps the list (items/ITEM/software.txt), and nowhere else:
+    # a file of yours with that name, kept in an item, is not the list.
+    for g in "$1"/items/*/software.txt; do [ -f "$g" ] && { f="$g"; break; }; done
     [ -n "$f" ] || return 0
     say ""
     info "List of software names stored in the can:" "${C_GREY}For reference only, never installed for you${C_RESET}"
@@ -298,8 +300,18 @@ can_row() {
         "${MAN[can.mint_release]} / ${MAN[can.cinnamon_version]}" "$size" "$(short_label "${MAN[can.label]:-}")"
 }
 
-# log_field LINE NAME -> the value of NAME=... in a log line.
-log_field() { printf '%s\n' "$1" | tr ' ' '\n' | sed -n "s/^$2=//p" | tr -d '"' | head -n 1; }
+# log_field LINE NAME -> the value of NAME=... in a log line (the first
+#   one, without quotes).
+log_field() {
+    local w
+    local -a words
+    read -r -a words <<< "$1"
+    for w in "${words[@]+"${words[@]}"}"; do
+        [[ "$w" == "$2="* ]] || continue
+        w="${w#"$2="}"; printf '%s\n' "${w//\"/}"
+        return 0
+    done
+}
 
 
 # ---------------------------------------------------------------------------

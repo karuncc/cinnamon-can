@@ -102,7 +102,7 @@ read_mint_info() {
 load_system_facts() {
     SYS_RELEASE="$(read_mint_info RELEASE)" || true
     SYS_EDITION="$(read_mint_info EDITION)" || true
-    SYS_CINNAMON="$(cinnamon --version 2>/dev/null | awk '{ print $NF; exit }')" || true
+    SYS_CINNAMON="$(cinnamon --version 2>/dev/null | awk 'NR == 1 { v = $NF } END { print v }')" || true
     SYS_ARCH="$(uname -m)"
     SYS_HOSTNAME="$(hostname 2>/dev/null || cat /etc/hostname 2>/dev/null)" || true
 }

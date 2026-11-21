@@ -40,7 +40,8 @@ new_can_id() {
             i=$(( n % ${#CAN_ID_CHARS} ))
             id="$id${CAN_ID_CHARS:i:1}"
         done
-        printf '%s\n' "$used" | grep -qx "$id" || break
+        # (a search inside bash: see the pipe rule in AGENTS.md)
+        [[ $'\n'"$used"$'\n' == *$'\n'"$id"$'\n'* ]] || break
         tries=$((tries + 1))
         [ "$tries" -lt 1000 ] || die "Could not find a free can ID"
     done

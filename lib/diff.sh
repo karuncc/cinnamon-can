@@ -233,7 +233,7 @@ resplit_tree() {
         rel="${f#"$src"/items/*/root}"
         takers=()
         for n in "${ITEM_NAMES[@]}"; do
-            split_words "${ITEM_SYSTEM[$n]:-}" | grep -qxF -- "$rel" && takers+=("$n")
+            [[ $'\n'"$(split_words "${ITEM_SYSTEM[$n]:-}")"$'\n' == *$'\n'"$rel"$'\n'* ]] && takers+=("$n")
         done
         if [ "${#takers[@]}" -eq 0 ]; then
             n="${f#"$src"/items/}"
@@ -249,7 +249,8 @@ resplit_tree() {
     # The wallpaper, language, time zone, software list and crontab: to the
     # items that take that kind ("special") now.
     for kind in wallpaper language timezone software crontab; do
-        from="$( { compgen -G "$src/items/*/$kind.txt" || true; } | head -n 1)"
+        from="$(compgen -G "$src/items/*/$kind.txt" || true)"
+        from="${from%%$'\n'*}"              # the first one
         [ -n "$from" ] || continue
         takers=()
         for n in "${ITEM_NAMES[@]}"; do item_has "$n" "$kind" && takers+=("$n"); done
