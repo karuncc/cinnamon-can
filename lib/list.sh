@@ -23,7 +23,7 @@ read_manifest() {
         function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
         /^\[.*\]$/ { sec = substr($0, 2, length($0) - 2); next }
         /^[ \t]*(#|$)/ { next }
-        # (control characters are left out: see CTRL_FROM in lib/common.sh)
+        # (control characters are left out: see CTRL_FROM in lib/screen.sh)
         { eq = index($0, "="); if (eq) print sec "\t" trim(substr($0, 1, eq - 1)) "\t" trim(novis(substr($0, eq + 1))) }' "$1")
 }
 
@@ -385,7 +385,7 @@ show_one_file() {
         lines="$(awk 'END { print NR }' "$f")"
         say "${SUB}$(file_dot "$label")  ${C_GREY}($(counted "$lines" line))${C_RESET}"
         # (the lines come from the can: vis() writes control characters
-        # as plain letters, see CTRL_AWK in lib/common.sh)
+        # as plain letters, see CTRL_AWK in lib/screen.sh)
         awk -v grey="$C_GREY" -v off="$C_RESET" "$CTRL_AWK"'
             { printf "    %s%4d%s   %s\n", grey, NR, off, vis($0) }' "$f"
     else

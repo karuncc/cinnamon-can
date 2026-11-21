@@ -632,7 +632,7 @@ line_counts() {
 #   into the real one (when lines were left out).
 diff_body() {
     # (the lines may come from a can: vis() writes control characters as
-    # plain letters, see CTRL_AWK in lib/common.sh)
+    # plain letters, see CTRL_AWK in lib/screen.sh)
     awk -v ma="${1:-}" -v mb="${2:-}" -v grey="$C_GREY" -v red="$C_RED" -v green="$C_GREEN" \
         -v off="$C_RESET" -v bm="$B_MINUS" -v bp="$B_PLUS" "$CTRL_AWK"'
         BEGIN { if (ma != "") while ((getline l < ma) > 0) A[++na] = l

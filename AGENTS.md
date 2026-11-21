@@ -52,9 +52,12 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
 ```
 cinnamon-can          command line, sudo hand-over, dispatch to lib/
 items/*.item          built-in items (one file per item)
-lib/common.sh         screen layout and messages, temp folder, INI
-                      reading, config, system facts, can IDs and lookup,
-                      log, utilities
+lib/common.sh         loads the three files below; temp folder, system
+                      facts and start-up checks, paths and files
+lib/screen.sh         screen layout and messages, text from a can,
+                      commands to copy, the pager
+lib/config.sh         INI reading, the config, the backup folder
+lib/cans.sh           can IDs and file names, lookup, labels, the log
 lib/items.sh          reads item files, item_on, patterns for the awk
                       files, the ignore rules
 lib/dconf.awk         sorts dconf settings into items (longest path wins)
@@ -139,7 +142,7 @@ LICENSE               MIT
 
 ## Screen output
 
-Every command prints in the same layout (helpers in `lib/common.sh`):
+Every command prints in the same layout (helpers in `lib/screen.sh`):
 
 - Two columns: a 9-character left column for a status badge (`info`,
   `ok`, `warn`, `err`) or a mark (`-`/`+`, `[NEW]`/`[DEL]`, and `UNDO` for
