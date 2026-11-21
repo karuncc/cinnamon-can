@@ -22,7 +22,8 @@ check "no personal or per-machine files" \
 section "The software list: programs you put in /usr/local/bin"
 # Only the files no package owns are listed. dpkg is asked once for all
 # of them; a stand-in answers that a file whose name has an even number
-# of letters belongs to a package, any other does not.
+# of letters belongs to a package (it answers the way dpkg does for a
+# package of one architecture, "package:amd64: /path"), any other does not.
 mkdir -p "$TMP/fake-dpkg"
 cat > "$TMP/fake-dpkg/dpkg" <<'EOF'
 #!/bin/sh
@@ -30,7 +31,7 @@ cat > "$TMP/fake-dpkg/dpkg" <<'EOF'
 shift; st=0
 for f; do
     n="$(basename "$f")"
-    if [ $(( ${#n} % 2 )) -eq 0 ]; then echo "cc-package: $f"
+    if [ $(( ${#n} % 2 )) -eq 0 ]; then echo "cc-package:amd64: $f"
     else echo "dpkg-query: no path found matching pattern $f" >&2; st=1; fi
 done
 exit $st

@@ -349,8 +349,9 @@ write_software_list() {
         # One question to dpkg for all of them (it is slow to start, about
         # half a second each time): a file no package owns is a program
         # you put there yourself. dpkg answers "package: /path" for each
-        # file a package owns.
-        { dpkg -S "${local_bin[@]}" 2>/dev/null || true; } | sed -n 's/^[^:]*: //p' > "$CC_TMP/software-owned.txt"
+        # file a package owns (also "package:amd64: /path", or "diversion
+        # by package from: /path"): the path is what follows the last ": ".
+        { dpkg -S "${local_bin[@]}" 2>/dev/null || true; } | sed -n 's/^.*: //p' > "$CC_TMP/software-owned.txt"
         printf '%s\n' "${local_bin[@]}" | awk -v owned="$CC_TMP/software-owned.txt" '
             BEGIN { while ((getline l < owned) > 0) mine[l] = 1 }
             !($0 in mine)'

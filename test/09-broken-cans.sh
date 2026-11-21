@@ -38,5 +38,16 @@ run s out "$CC" -c "$CONF" peek NMF2
 check "... peek too"                             sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "The specified can has no manifest"' sh "$s" "$out"
 run s out "$CC" -c "$CONF" label NMF2 "x"
 check "... and label"                            sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "The specified can has no manifest"' sh "$s" "$out"
+# A can packed again by hand, without "./" in front of the names inside:
+# every command finds its manifest, as in any other can.
+U="$TMP/repacked"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+sed -i 's/^id[[:space:]]*=.*/id = RPK2/' "$U/manifest.txt"
+( cd "$U" && tar -czf "$TMP/cans/manual-RPK2-20300101T000005+0000.tar.gz.canned" manifest.txt catalog items )
+run s out "$CC" -c "$CONF" list
+check "a can packed by hand without ./: list shows it" has "$out" "└ [RPK2] "
+run s out "$CC" -c "$CONF" label RPK2 "repacked"
+check "... label changes it"                     [ "$s" -eq 0 ]
+run s out "$CC" -c "$CONF" peek RPK2
+check "... and peek shows the new label"         has "$out" "└ Label: repacked"
 
 finish

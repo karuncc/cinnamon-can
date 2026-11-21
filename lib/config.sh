@@ -73,7 +73,7 @@ words() {
     # Without quotes, bash splits it by itself (and keeps * and ? as
     # they are).
     if [[ "$_s" != *'"'* ]]; then
-        read -r -d '' -a _words <<< "$_s" || true
+        IFS=$' \t\n' read -r -d '' -a _words <<< "$_s" || true
         return 0
     fi
     for (( _i = 0; _i < ${#_s}; _i++ )); do

@@ -37,7 +37,9 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
   pipe into `grep -q` (or `head`) can fail on long input: it stops reading
   at the first match, the command before it is cut off, and the pipe
   counts as failed (search a variable with `[[ $x == *text* ]]` or
-  `grep -q ... <<< "$x"` instead).
+  `grep -q ... <<< "$x"` instead; `test/01-syntax.sh` fails on a pipe
+  into `head` or `grep -q`). The same holds for `awk` that stops with
+  `exit` behind a pipe: let it read to the end instead.
 - sudo is only used by `sudo cinnamon-can open CAN`. The program then
   re-runs itself as the real user (`CC_SYSTEM_RESTORE=1`) and calls `sudo`
   only to write system files. Never run anything else as root.

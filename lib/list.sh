@@ -52,17 +52,24 @@ check_manifest() {
     manifest_complete || { CAN_PROBLEM="incomplete"; return 1; }
 }
 
-# take_manifest CAN FILE -> copies only the manifest out of the can file
-#   CAN into FILE, without unpacking the rest (no FILE when the can has
-#   none). Fails, with CAN_PROBLEM "damaged", when CAN cannot be
-#   unpacked at all.
+# take_manifest CAN FILE -> copies only the manifest out of the can CAN (a
+#   can file, or one unzipped already: tar can tell) into FILE, without
+#   unpacking the rest (no FILE when the can has none). MANIFEST_MEMBER
+#   says how the can names it: "./manifest.txt", as seal makes it, or
+#   "manifest.txt", in a can packed again by hand (open_can unpacks all
+#   and finds either). Fails, with CAN_PROBLEM "damaged", when CAN cannot
+#   be unpacked at all.
+MANIFEST_MEMBER=""
 take_manifest() {
+    local m
     rm -f "$2"
-    tar -xzOf "$1" ./manifest.txt > "$2" 2>/dev/null && return 0
+    for m in ./manifest.txt manifest.txt; do
+        if tar -xOf "$1" "$m" > "$2" 2>/dev/null; then MANIFEST_MEMBER="$m"; return 0; fi
+    done
     rm -f "$2"
     # Not a can at all, or a can without a manifest? (Only then is the
     # whole file read.)
-    tar -tzf "$1" >/dev/null 2>&1 || { CAN_PROBLEM="damaged"; return 1; }
+    tar -tf "$1" >/dev/null 2>&1 || { CAN_PROBLEM="damaged"; return 1; }
 }
 
 # open_can PATH DIR -> unpacks a can into DIR and reads its manifest.
@@ -304,9 +311,9 @@ can_row() {
 #   one, without quotes).
 log_field() {
     local w
-    local -a words
-    read -r -a words <<< "$1"
-    for w in "${words[@]+"${words[@]}"}"; do
+    local -a fields
+    IFS=$' \t\n' read -r -a fields <<< "$1"
+    for w in "${fields[@]+"${fields[@]}"}"; do
         [[ "$w" == "$2="* ]] || continue
         w="${w#"$2="}"; printf '%s\n' "${w//\"/}"
         return 0

@@ -33,9 +33,8 @@ cmd_label() {
     tarball="$CC_TMP/can.tar"
     gzip -dc "$can" > "$tarball" 2>/dev/null && tar -tf "$tarball" >/dev/null 2>&1 \
         || not_a_can "$can" damaged
-    tar -xOf "$tarball" ./manifest.txt > "$CC_TMP/manifest.txt" 2>/dev/null \
-        || rm -f "$CC_TMP/manifest.txt"
-    check_manifest "$CC_TMP/manifest.txt" || not_a_can "$can" "$CAN_PROBLEM"
+    take_manifest "$tarball" "$CC_TMP/manifest.txt" && check_manifest "$CC_TMP/manifest.txt" \
+        || not_a_can "$can" "$CAN_PROBLEM"
     id="${MAN[can.id]}" old="${MAN[can.label]:-}"
 
     say ""
@@ -48,11 +47,12 @@ cmd_label() {
         || die "The can $(show_id "$id") cannot be changed: its folder is not writable" \
                "${SUB}$(file_dot "$(to_tilde "$can")")"
 
-    # The new manifest replaces the old one inside the archive; nothing
-    # else is unpacked, so every other file keeps its exact permissions.
+    # The new manifest replaces the old one inside the archive, under the
+    # same name (see take_manifest); nothing else is unpacked, so every
+    # other file keeps its exact permissions.
     mkdir -p "$CC_TMP/new"
     set_label "$CC_TMP/manifest.txt" "$LABEL" > "$CC_TMP/new/manifest.txt"
-    { tar --delete -f "$tarball" ./manifest.txt && tar -C "$CC_TMP/new" -rf "$tarball" ./manifest.txt; } \
+    { tar --delete -f "$tarball" "$MANIFEST_MEMBER" && tar -C "$CC_TMP/new" -rf "$tarball" "$MANIFEST_MEMBER"; } \
         || die "Could not put the new label into the can; it was not changed"
 
     # Written next to the can first, then put in its place in one step,
