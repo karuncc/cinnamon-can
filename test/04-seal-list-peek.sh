@@ -90,5 +90,15 @@ if [ -n "$SW" ]; then
 else
     skip 'the can has no software list'
 fi
+# A file of yours called software.txt, kept by an item of yours, is not
+# the software list (seal keeps that as items/ITEM/software.txt).
+U="$TMP/unpack-swfile"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+rm -f "$U"/items/*/software.txt
+mkdir -p "$U/items/cc-own/home/Documents"
+printf '[apps]\ncc-not-a-list\n' > "$U/items/cc-own/home/Documents/software.txt"
+printf 'description = test\ndefault = on\nfiles = ~/Documents/software.txt\n' > "$U/catalog/user/cc-own.item"
+pack "$U" SWF2 14
+run s out "$CC" -c "$CONF" peek SWF2
+check "a file of yours called software.txt is not the software list" hasnt "$out" "cc-not-a-list"
 
 finish

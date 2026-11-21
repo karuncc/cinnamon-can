@@ -58,14 +58,14 @@ cmd_open() {
     # sudo does not search ~/.local/bin, so always show the full path.
     local sudo_cmd
     sudo_cmd="sudo $(shell_word "$(to_tilde "$CC_ROOT/cinnamon-can")")$(config_option) open $CMP_PLUS_REF"
-    if [ "$CMP_SYSTEM" -gt 0 ] && [ "$with_system" != "1" ]; then
+    if [ "$CNT_SYSTEM" -gt 0 ] && [ "$with_system" != "1" ]; then
         say ""
-        if [ "$CMP_SYSTEM" -eq "$CMP_TOTAL" ]; then
+        if [ "$CNT_SYSTEM" -eq "$CMP_TOTAL" ]; then
             # Nothing else differs: asking and restarting would change nothing.
             info "Only system files and settings differ; they need sudo." "To restore them, run:" "\$ $sudo_cmd"
             return 0
         fi
-        warn "$CMP_SYSTEM system change(s) will NOT be made without sudo." \
+        warn "$CNT_SYSTEM system change(s) will NOT be made without sudo." \
              "To include them, stop here and run:" "\$ $sudo_cmd"
     fi
 
@@ -102,7 +102,7 @@ cmd_open() {
         run_step "Language" apply_language || problems=1
     fi
     system_state="none"
-    if [ "$CMP_SYSTEM" -gt 0 ]; then
+    if [ "$CNT_SYSTEM" -gt 0 ]; then
         if [ "$with_system" = "1" ]; then
             run_step "System files" apply_system && system_state="restored" || { system_state="failed"; problems=1; }
         else
@@ -132,7 +132,6 @@ cmd_open() {
 #   can uses that is not installed here, with the commands to install it.
 open_summary() {
     local deleted=() kind path
-    count_differences
     say ""
     info "Opening it changes on this computer:" \
         "${SUB}$(status_dot "$CNT_SETTINGS" "$C_YELLOW") $CNT_SETTINGS setting(s)" \

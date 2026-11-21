@@ -31,6 +31,10 @@ if command -v script >/dev/null 2>&1; then
     # On 40 columns the message alone nearly fills the line: 10 characters stay.
     s=0; out="$(COLS=40 in_terminal "" -c "a-config-file-name-typed-by-hand-that-is-far-too-long-for-the-line" list)" || s=$?
     check "... also on a very narrow screen"           sh -c 'printf "%s\n" "$1" | grep -qxF "  ERROR  Provided config file not found: …line.conf"' sh "$out"
+    # A computer set to a language without UTF-8 (LC_ALL=C): a name in
+    # Thai letters is still cut between two letters, never inside one.
+    out="$(LC_ALL=C COLS=60 in_terminal "" -c "$(printf 'ก%.0s' {1..60}).conf" list)" || true
+    check "... between two letters, whatever the language" sh -c 'printf "%s" "$1" | grep -qF "found: …กก" && printf "%s" "$1" | iconv -f UTF-8 -t UTF-8 >/dev/null' sh "$out"
 else
     skip '"script" is missing: what only shows in a terminal is not tried'
 fi

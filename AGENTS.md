@@ -37,7 +37,9 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
   pipe into `grep -q` (or `head`) can fail on long input: it stops reading
   at the first match, the command before it is cut off, and the pipe
   counts as failed (search a variable with `[[ $x == *text* ]]` or
-  `grep -q ... <<< "$x"` instead).
+  `grep -q ... <<< "$x"` instead; `test/01-syntax.sh` fails on a pipe
+  into `head` or `grep -q`). The same holds for `awk` that stops with
+  `exit` behind a pipe: let it read to the end instead.
 - sudo is only used by `sudo cinnamon-can open CAN`. The program then
   re-runs itself as the real user (`CC_SYSTEM_RESTORE=1`) and calls `sudo`
   only to write system files. Never run anything else as root.
@@ -52,9 +54,12 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
 ```
 cinnamon-can          command line, sudo hand-over, dispatch to lib/
 items/*.item          built-in items (one file per item)
-lib/common.sh         screen layout and messages, temp folder, INI
-                      reading, config, system facts, can IDs and lookup,
-                      log, utilities
+lib/common.sh         loads the three files below; temp folder, system
+                      facts and start-up checks, paths and files
+lib/screen.sh         screen layout and messages, text from a can,
+                      commands to copy, the pager
+lib/config.sh         INI reading, the config, the backup folder
+lib/cans.sh           can IDs and file names, lookup, labels, the log
 lib/items.sh          reads item files, item_on, patterns for the awk
                       files, the ignore rules
 lib/dconf.awk         sorts dconf settings into items (longest path wins)
@@ -139,7 +144,7 @@ LICENSE               MIT
 
 ## Screen output
 
-Every command prints in the same layout (helpers in `lib/common.sh`):
+Every command prints in the same layout (helpers in `lib/screen.sh`):
 
 - Two columns: a 9-character left column for a status badge (`info`,
   `ok`, `warn`, `err`) or a mark (`-`/`+`, `[NEW]`/`[DEL]`, and `UNDO` for

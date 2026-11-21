@@ -19,4 +19,36 @@ check "no never-kept settings (connect-id ...)" \
 check "no personal or per-machine files" \
     sh -c '! find "$1/items" -path "*enchant*" -o -name "monitors.xml" -o -path "*Templates*" | grep -q .' sh "$U"
 
+section "The software list: programs you put in /usr/local/bin"
+# Only the files no package owns are listed. dpkg is asked once for all
+# of them; a stand-in answers that a file whose name has an even number
+# of letters belongs to a package (it answers the way dpkg does for a
+# package of one architecture, "package:amd64: /path"), any other does not.
+mkdir -p "$TMP/fake-dpkg"
+cat > "$TMP/fake-dpkg/dpkg" <<'EOF'
+#!/bin/sh
+[ "$1" = "-S" ] || exit 1
+shift; st=0
+for f; do
+    n="$(basename "$f")"
+    if [ $(( ${#n} % 2 )) -eq 0 ]; then echo "cc-package:amd64: $f"
+    else echo "dpkg-query: no path found matching pattern $f" >&2; st=1; fi
+done
+exit $st
+EOF
+chmod +x "$TMP/fake-dpkg/dpkg"
+want=""
+for f in /usr/local/bin/*; do
+    [ -f "$f" ] || continue
+    n="${f##*/}"; [ $(( ${#n} % 2 )) -eq 0 ] || want+="$f"$'\n'
+done
+if compgen -G '/usr/local/bin/*' >/dev/null; then
+    got="$(env PATH="$TMP/fake-dpkg:$PATH" bash -c 'CC_ROOT="$1"
+               source "$1/lib/common.sh" >/dev/null; source "$1/lib/items.sh"; source "$1/lib/collect.sh"
+               CC_TMP="$2"; write_software_list' sh "$ROOT" "$TMP" | sed -n '/^\[local-programs\]$/,/^\[sources\]$/p' | sed '1d;$d')"
+    check "only the programs no package owns are listed" [ "$got" = "${want%$'\n'}" ]
+else
+    skip "this computer has nothing in /usr/local/bin"
+fi
+
 finish

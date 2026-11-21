@@ -25,5 +25,29 @@ echo "this is not a tar file" > "$TMP/cans/manual-GRB2-20300101T000003+0000.tar.
 run s out "$CC" -c "$CONF" peek GRB2
 check "peek on a damaged file: exit 1"           [ "$s" -eq 1 ]
 check "peek calls it damaged"                    has "$out" "damaged"
+run s out "$CC" -c "$CONF" list
+check "list names a damaged file too"            has "$out" "└ The file cannot be unpacked"
+# A tar.gz that unpacks but has no manifest: every command reads a can
+# the same way (check_manifest), so each one gives the same reason.
+mkdir -p "$TMP/no-manifest/items/sound"
+echo "[org/cinnamon/sounds]" > "$TMP/no-manifest/items/sound/dconf.ini"
+( cd "$TMP/no-manifest" && tar -czf "$TMP/cans/manual-NMF2-20300101T000004+0000.tar.gz.canned" . )
+run s out "$CC" -c "$CONF" list
+check "a can without a manifest: list says so"   has "$out" "└ It has no manifest"
+run s out "$CC" -c "$CONF" peek NMF2
+check "... peek too"                             sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "The specified can has no manifest"' sh "$s" "$out"
+run s out "$CC" -c "$CONF" label NMF2 "x"
+check "... and label"                            sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "The specified can has no manifest"' sh "$s" "$out"
+# A can packed again by hand, without "./" in front of the names inside:
+# every command finds its manifest, as in any other can.
+U="$TMP/repacked"; mkdir "$U"; tar -C "$U" -xzf "$BASE"
+sed -i 's/^id[[:space:]]*=.*/id = RPK2/' "$U/manifest.txt"
+( cd "$U" && tar -czf "$TMP/cans/manual-RPK2-20300101T000005+0000.tar.gz.canned" manifest.txt catalog items )
+run s out "$CC" -c "$CONF" list
+check "a can packed by hand without ./: list shows it" has "$out" "└ [RPK2] "
+run s out "$CC" -c "$CONF" label RPK2 "repacked"
+check "... label changes it"                     [ "$s" -eq 0 ]
+run s out "$CC" -c "$CONF" peek RPK2
+check "... and peek shows the new label"         has "$out" "└ Label: repacked"
 
 finish
