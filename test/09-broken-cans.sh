@@ -25,5 +25,18 @@ echo "this is not a tar file" > "$TMP/cans/manual-GRB2-20300101T000003+0000.tar.
 run s out "$CC" -c "$CONF" peek GRB2
 check "peek on a damaged file: exit 1"           [ "$s" -eq 1 ]
 check "peek calls it damaged"                    has "$out" "damaged"
+run s out "$CC" -c "$CONF" list
+check "list names a damaged file too"            has "$out" "└ The file cannot be unpacked"
+# A tar.gz that unpacks but has no manifest: every command reads a can
+# the same way (check_manifest), so each one gives the same reason.
+mkdir -p "$TMP/no-manifest/items/sound"
+echo "[org/cinnamon/sounds]" > "$TMP/no-manifest/items/sound/dconf.ini"
+( cd "$TMP/no-manifest" && tar -czf "$TMP/cans/manual-NMF2-20300101T000004+0000.tar.gz.canned" . )
+run s out "$CC" -c "$CONF" list
+check "a can without a manifest: list says so"   has "$out" "└ It has no manifest"
+run s out "$CC" -c "$CONF" peek NMF2
+check "... peek too"                             sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "The specified can has no manifest"' sh "$s" "$out"
+run s out "$CC" -c "$CONF" label NMF2 "x"
+check "... and label"                            sh -c '[ "$1" -eq 1 ] && printf "%s" "$2" | grep -qF "The specified can has no manifest"' sh "$s" "$out"
 
 finish

@@ -37,6 +37,34 @@ manifest_complete() {
     done
 }
 
+# check_manifest FILE -> reads a can's manifest (FILE, already taken out
+#   of the can) into MAN and checks it. Fails when the can cannot be
+#   used, with CAN_PROBLEM saying why: no-manifest (there is no FILE) or
+#   incomplete. Every can a command is given is read through here
+#   (open_can, can_row, cmd_label), so it is checked the same way
+#   everywhere. (A manifest this run wrote itself, or already checked
+#   here, is read again with read_manifest alone.)
+CAN_PROBLEM=""
+check_manifest() {
+    CAN_PROBLEM=""
+    if [ ! -f "$1" ]; then MAN=(); CAN_PROBLEM="no-manifest"; return 1; fi
+    read_manifest "$1"
+    manifest_complete || { CAN_PROBLEM="incomplete"; return 1; }
+}
+
+# take_manifest CAN FILE -> copies only the manifest out of the can file
+#   CAN into FILE, without unpacking the rest (no FILE when the can has
+#   none). Fails, with CAN_PROBLEM "damaged", when CAN cannot be
+#   unpacked at all.
+take_manifest() {
+    rm -f "$2"
+    tar -xzOf "$1" ./manifest.txt > "$2" 2>/dev/null && return 0
+    rm -f "$2"
+    # Not a can at all, or a can without a manifest? (Only then is the
+    # whole file read.)
+    tar -tzf "$1" >/dev/null 2>&1 || { CAN_PROBLEM="damaged"; return 1; }
+}
+
 # open_can PATH DIR -> unpacks a can into DIR and reads its manifest.
 open_can() {
     local can="$1" dir="$2"
@@ -46,21 +74,28 @@ open_can() {
     # may hold a file you cannot read, which could then be neither shown
     # nor compared. (Links are left as they are.)
     chmod -R u+rX -- "$dir" 2>/dev/null || true
-    [ -f "$dir/manifest.txt" ] || not_a_can "$can" no-manifest
-    read_manifest "$dir/manifest.txt"
-    manifest_complete || not_a_can "$can" incomplete
+    check_manifest "$dir/manifest.txt" || not_a_can "$can" "$CAN_PROBLEM"
 }
 
-# not_a_can PATH WHY -> stops with what is wrong with the can (WHY:
-#   damaged, no-manifest or incomplete), the can on its own line under it.
-not_a_can() {
-    local why
-    case "$2" in
-        damaged)     why="cannot be unpacked; it is damaged or not a can" ;;
-        no-manifest) why="has no manifest; it was not made by cinnamon-can" ;;
-        *)           why="has an incomplete manifest; it was not made by cinnamon-can" ;;
+# can_problem WHY [row] -> what is wrong with a can, in words (WHY:
+#   damaged, no-manifest or incomplete; see check_manifest). The long form
+#   follows "The specified can ..."; the short one ("row") is a line of
+#   its own, under the can's file name in a list.
+can_problem() {
+    case "$1${2:+-$2}" in
+        damaged)         printf 'cannot be unpacked; it is damaged or not a can' ;;
+        no-manifest)     printf 'has no manifest; it was not made by cinnamon-can' ;;
+        incomplete)      printf 'has an incomplete manifest; it was not made by cinnamon-can' ;;
+        damaged-row)     printf 'The file cannot be unpacked' ;;
+        no-manifest-row) printf 'It has no manifest' ;;
+        *)               printf 'Its manifest is incomplete' ;;
     esac
-    die "The specified can $why:" "${SUB}$(file_dot "$(to_tilde "$1")")"
+}
+
+# not_a_can PATH WHY -> stops with what is wrong with the can (WHY: see
+#   can_problem), the can on its own line under it.
+not_a_can() {
+    die "The specified can $(can_problem "$2"):" "${SUB}$(file_dot "$(to_tilde "$1")")"
 }
 
 # label_or_none TEXT -> TEXT, or a grey "(none)" when there is no label,
@@ -250,10 +285,8 @@ can_table_head() { table_head 6 "ID" 7 "KIND" 16 "CREATED" 12 "HOST" 14 "MINT / 
 ROW_PROBLEM=""
 can_row() {
     local f="$2" size created kind
-    tar -xzOf "$f" ./manifest.txt > "$CC_TMP/m.txt" 2>/dev/null \
-        || { ROW_PROBLEM="The file cannot be unpacked"; return 1; }
-    read_manifest "$CC_TMP/m.txt"
-    manifest_complete || { ROW_PROBLEM="Its manifest is incomplete"; return 1; }
+    take_manifest "$f" "$CC_TMP/m.txt" && check_manifest "$CC_TMP/m.txt" \
+        || { ROW_PROBLEM="$(can_problem "$CAN_PROBLEM" row)"; return 1; }
     size="$(human_size "$(stat -c %s "$f")")"
     created="${MAN[can.created]:0:16}"
     # "manual" in blue: a can you made yourself (blue like the dot of

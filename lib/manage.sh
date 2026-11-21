@@ -28,14 +28,14 @@ cmd_label() {
     clean_label "$2"
     make_tmpdir
 
-    # Unzip the can and read its manifest (the same checks as every command).
+    # Unzip the whole can (the new label goes into this copy), then check
+    # its manifest the way every command does (check_manifest).
     tarball="$CC_TMP/can.tar"
     gzip -dc "$can" > "$tarball" 2>/dev/null && tar -tf "$tarball" >/dev/null 2>&1 \
         || not_a_can "$can" damaged
     tar -xOf "$tarball" ./manifest.txt > "$CC_TMP/manifest.txt" 2>/dev/null \
-        || not_a_can "$can" no-manifest
-    read_manifest "$CC_TMP/manifest.txt"
-    manifest_complete || not_a_can "$can" incomplete
+        || rm -f "$CC_TMP/manifest.txt"
+    check_manifest "$CC_TMP/manifest.txt" || not_a_can "$can" "$CAN_PROBLEM"
     id="${MAN[can.id]}" old="${MAN[can.label]:-}"
 
     say ""
