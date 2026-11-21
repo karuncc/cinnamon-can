@@ -640,7 +640,8 @@ autocans stay as they are; a new log starts with the next `seal` or `open`.
 Branch, commit, pull request and release conventions are in
 `CONTRIBUTING.md`, and the working rules (for people and AI tools alike)
 in `AGENTS.md`. Each release is summed up in its notes on the GitHub
-Releases page. Run `bash test/run-tests.sh` after a change.
+Releases page. Run `bash test/run-tests.sh` after a change. Pull
+requests go into the `dev` branch; `main` holds the released version.
 
 ## License
 

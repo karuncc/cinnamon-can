@@ -141,8 +141,9 @@ show_item_problems() {
 # load_item_file FILE SOURCE -> reads one item; returns 1 on any problem.
 load_item_file() {
     local file="$1" src="$2" name section key lines value p bad=0
+    local -a ws
     local -A at=()        # field -> the line(s) it is on, for the messages
-    name="$(basename "$file" .item)"
+    name="${file##*/}"; name="${name%.item}"
     if [[ ! "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
         item_problem "An item name may only use a-z, 0-9 and \"-\""; return 1
     fi
@@ -176,25 +177,31 @@ load_item_file() {
     done < <(parse_ini "$file" item)
 
     [ -n "${ITEM_DESC[$name]}" ] || item_problem "The description is missing"
-    while IFS= read -r p; do
+    words ws "${ITEM_DCONF[$name]}"
+    for p in "${ws[@]+"${ws[@]}"}"; do
         valid_dconf_path "$p" || item_problem "Settings path \"$p\" in dconf is not valid" "${at[dconf]:-}"
-    done < <(split_words "${ITEM_DCONF[$name]}")
-    while IFS= read -r p; do
+    done
+    words ws "${ITEM_FILES[$name]}"
+    for p in "${ws[@]+"${ws[@]}"}"; do
         valid_home_path "$p" || item_problem "File \"$p\" in files must start with ~/ (no ..)" "${at[files]:-}"
-    done < <(split_words "${ITEM_FILES[$name]}")
-    while IFS= read -r p; do
+    done
+    words ws "${ITEM_EXCLUDE[$name]}"
+    for p in "${ws[@]+"${ws[@]}"}"; do
         valid_home_path "$p" || valid_dconf_path "$p" \
             || item_problem "Entry \"$p\" in exclude must start with ~/ (a file) or / (a setting)" "${at[exclude]:-}"
-    done < <(split_words "${ITEM_EXCLUDE[$name]}")
-    while IFS= read -r p; do
+    done
+    words ws "${ITEM_SYSTEM[$name]}"
+    for p in "${ws[@]+"${ws[@]}"}"; do
         [[ "$p" == /* && "$p" != "$HOME"/* && "/$p/" != */../* ]] \
             || item_problem "System file \"$p\" must be a full path outside your home" "${at[system]:-}"
-    done < <(split_words "${ITEM_SYSTEM[$name]}")
-    for p in ${ITEM_SPECIAL[$name]}; do
+    done
+    words ws "${ITEM_SPECIAL[$name]}"
+    for p in "${ws[@]+"${ws[@]}"}"; do
         case "$p" in wallpaper|language|timezone|software|crontab) ;;
             *) item_problem "Unknown special \"$p\"" "${at[special]:-}" ;; esac
     done
-    while IFS= read -r p; do
+    words ws "${ITEM_IGNORE[$name]}"
+    for p in "${ws[@]+"${ws[@]}"}"; do
         if [[ "$p" == "~/"* ]]; then
             valid_home_path "${p%%:*}" && [[ "$p" == *:?* ]] \
                 || item_problem "Entry \"$p\" in ignore must look like ~/path/file:beginning-of-line" "${at[ignore]:-}"
@@ -202,7 +209,7 @@ load_item_file() {
             valid_ignore_setting "$p" \
                 || item_problem "Entry \"$p\" in ignore is not a setting (/a/b/c, /a/b/, /a/b/c*, */name, */name*, */*name) or a file line (~/file:beginning)" "${at[ignore]:-}"
         fi
-    done < <(split_words "${ITEM_IGNORE[$name]}")
+    done
     [ "$bad" -eq 0 ]
 }
 
@@ -268,12 +275,14 @@ item_cell() {
     printf '%s%s%*s' "$(item_dot "$1")" "$1" $(( $2 > shown ? $2 - shown : 0 )) ''
 }
 
-# items_in_order -> your own items first (they win ties), then built-in.
+# items_in_order VAR -> sets the array VAR to every item's name: your own
+#   items first (they win ties), then the built-in ones.
 items_in_order() {
-    local n
-    for n in "${ITEM_NAMES[@]}"; do [ "${ITEM_SRC[$n]}" = "user" ] && printf '%s\n' "$n"; done
-    for n in "${ITEM_NAMES[@]}"; do [ "${ITEM_SRC[$n]}" = "builtin" ] && printf '%s\n' "$n"; done
-    return 0
+    local -n _order="$1"
+    local _n
+    _order=()
+    for _n in "${ITEM_NAMES[@]}"; do [ "${ITEM_SRC[$_n]}" != "user" ] || _order+=("$_n"); done
+    for _n in "${ITEM_NAMES[@]}"; do [ "${ITEM_SRC[$_n]}" != "builtin" ] || _order+=("$_n"); done
 }
 
 # write_dconf_patterns FILE -> "kind<TAB>item<TAB>path" lines for dconf.awk.
@@ -281,15 +290,18 @@ items_in_order() {
 #   never (nobody keeps it). ALL items are listed, also switched-off ones,
 #   so a switched-off item's settings are not swallowed by a catch-all.
 write_dconf_patterns() {
-    local out="$1" n p
-    : > "$out"
-    while IFS= read -r n; do
-        while IFS= read -r p; do printf 'inc\t%s\t%s\n' "$n" "$p" >> "$out"; done < <(split_words "${ITEM_DCONF[$n]}")
-        while IFS= read -r p; do
-            [[ "$p" == /* ]] && printf 'exc\t%s\t%s\n' "$n" "$p" >> "$out"
-        done < <(split_words "${ITEM_EXCLUDE[$n]}")
-    done < <(items_in_order)
-    while IFS= read -r p; do printf 'never\t-\t%s\n' "$p" >> "$out"; done <<< "$NEVER_KEEP_DCONF"
+    local n p
+    local -a order ws
+    items_in_order order
+    {
+        for n in "${order[@]+"${order[@]}"}"; do
+            words ws "${ITEM_DCONF[$n]}"
+            for p in "${ws[@]+"${ws[@]}"}"; do printf 'inc\t%s\t%s\n' "$n" "$p"; done
+            words ws "${ITEM_EXCLUDE[$n]}"
+            for p in "${ws[@]+"${ws[@]}"}"; do [[ "$p" != /* ]] || printf 'exc\t%s\t%s\n' "$n" "$p"; done
+        done
+        while IFS= read -r p; do printf 'never\t-\t%s\n' "$p"; done <<< "$NEVER_KEEP_DCONF"
+    } > "$1"
 }
 
 # drop_never_kept DIR -> takes the never-kept settings out of every
@@ -317,7 +329,7 @@ drop_never_kept() {
 
 # keep_own_ignore -> remembers the "ignore" fields of the items on THIS
 #   computer. A can brings its own items, and an older can's items may not
-#   know about a line added since: comparing uses both (see ignore_words).
+#   know about a line added since: comparing uses both (see ignore_list).
 declare -A OWN_IGNORE=()
 keep_own_ignore() {
     local n
@@ -325,33 +337,46 @@ keep_own_ignore() {
     for n in "${ITEM_NAMES[@]}"; do OWN_IGNORE[$n]="${ITEM_IGNORE[$n]}"; done
 }
 
-# ignore_words ITEM -> every "ignore" entry of ITEM, one per line: from
-#   the item now loaded (the can's) and from this computer's item of the
-#   same name.
-ignore_words() {
-    { split_words "${ITEM_IGNORE[$1]:-}"; split_words "${OWN_IGNORE[$1]:-}"; } | awk 'NF && !seen[$0]++'
+# ignore_list VAR ITEM -> sets the array VAR to every "ignore" entry of
+#   ITEM, each once: from the item now loaded (the can's) and from this
+#   computer's item of the same name.
+ignore_list() {
+    local -n _list="$1"
+    local -a _can _own
+    local -A _seen=()
+    local _p
+    _list=()
+    words _can "${ITEM_IGNORE[$2]:-}"
+    words _own "${OWN_IGNORE[$2]:-}"
+    for _p in "${_can[@]+"${_can[@]}"}" "${_own[@]+"${_own[@]}"}"; do
+        [ -z "${_seen[$_p]+set}" ] || continue
+        _seen[$_p]=1; _list+=("$_p")
+    done
 }
 
 # flat_without_ignored INI ITEM -> item<TAB>path<TAB>value for every
 #   setting in INI, leaving out the ones ITEM ignores.
 flat_without_ignored() {
     local ini="$1" n="$2" pat="$CC_TMP/ignore-patterns.txt" p
+    local -a ign
+    ignore_list ign "$n"
     { printf 'inc\t%s\t/\n' "$n"
-      ignore_words "$n" | while IFS= read -r p; do
-          [[ "$p" == "~/"* ]] || printf 'exc\t%s\t%s\n' "$n" "$p"
-      done; } > "$pat"
+      for p in "${ign[@]+"${ign[@]}"}"; do [[ "$p" == "~/"* ]] || printf 'exc\t%s\t%s\n' "$n" "$p"; done
+    } > "$pat"
     awk -f "$CC_ROOT/lib/dconf.awk" -v flat=1 "$pat" "$ini"
 }
 
 # write_file_patterns FILE -> "kind<TAB>item<TAB>/full/path" for files.awk.
 write_file_patterns() {
-    local out="$1" n p
-    : > "$out"
-    while IFS= read -r n; do
-        while IFS= read -r p; do printf 'inc\t%s\t%s\n' "$n" "$(expand_home "$p")" >> "$out"; done < <(split_words "${ITEM_FILES[$n]}")
-        while IFS= read -r p; do
-            [[ "$p" == "~/"* ]] && printf 'exc\t%s\t%s\n' "$n" "$(expand_home "$p")" >> "$out"
-        done < <(split_words "${ITEM_EXCLUDE[$n]}")
-    done < <(items_in_order)
-    return 0
+    local n p
+    local -a order ws
+    items_in_order order
+    {
+        for n in "${order[@]+"${order[@]}"}"; do
+            words ws "${ITEM_FILES[$n]}"
+            for p in "${ws[@]+"${ws[@]}"}"; do printf 'inc\t%s\t%s\n' "$n" "$HOME/${p#\~/}"; done
+            words ws "${ITEM_EXCLUDE[$n]}"
+            for p in "${ws[@]+"${ws[@]}"}"; do [[ "$p" != "~/"* ]] || printf 'exc\t%s\t%s\n' "$n" "$HOME/${p#\~/}"; done
+        done
+    } > "$1"
 }

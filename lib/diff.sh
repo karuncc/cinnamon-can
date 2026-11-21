@@ -41,7 +41,7 @@ cmd_diff() {
 }
 
 # Results of build_comparison, used by "diff" and "open":
-CMP_MINUS="" CMP_PLUS="" CMP_RESULT="" CMP_REFS="" CMP_TOTAL=0 CMP_SYSTEM=0
+CMP_MINUS="" CMP_PLUS="" CMP_RESULT="" CMP_REFS="" CMP_TOTAL=0
 CMP_PLUS_ID="" CMP_MINUS_ID=""   # the minus ID only when two cans are compared
 CMP_MINUS_LABEL="" CMP_PLUS_LABEL="" CMP_NOTES="" CMP_NOTES_TITLE=""
 CMP_PLUS_REF="" CMP_MINUS_REF=""   # how a command to copy names each can (can_ref)
@@ -138,8 +138,8 @@ build_comparison() {
     # (only this computer can hold files you cannot read; see UNREADABLE)
     [ -n "$minus_can" ] || drop_unreadable "$CMP_RESULT"
     CMP_TOTAL="$(wc -l < "$CMP_RESULT")"
-    CMP_SYSTEM="$(awk -F'\t' '$2 == "system" || $3 == "(time zone)"' "$CMP_RESULT" | wc -l)"
     check_refs "$CMP_PLUS" > "$CMP_REFS"
+    count_differences
 
     # Kept for the report (diff_report), which is written separately.
     CMP_MINUS_LABEL="$minus_label" CMP_PLUS_LABEL="$plus_label"
@@ -184,9 +184,9 @@ diff_report() {
 #   find an item (the catch-alls), and what an item excludes now is left
 #   out on purpose, just as when this computer is read.
 resplit_tree() {
-    local src="$1" out="$2" plus="$3" n f rel owner kind from split="$CC_TMP/resplit"
+    local src="$1" out="$2" plus="$3" n f p rel owner kind from split="$CC_TMP/resplit"
     local left="$CC_TMP/left-out.txt"
-    local -a takers
+    local -a takers ws
     rm -rf "$out" "$split"; mkdir -p "$out/items" "$split"; : > "$left"
 
     # Settings: all of them together, sorted again (lib/dconf.awk).
@@ -233,7 +233,8 @@ resplit_tree() {
         rel="${f#"$src"/items/*/root}"
         takers=()
         for n in "${ITEM_NAMES[@]}"; do
-            split_words "${ITEM_SYSTEM[$n]:-}" | grep -qxF -- "$rel" && takers+=("$n")
+            words ws "${ITEM_SYSTEM[$n]:-}"
+            for p in "${ws[@]+"${ws[@]}"}"; do [ "$p" != "$rel" ] || { takers+=("$n"); break; }; done
         done
         if [ "${#takers[@]}" -eq 0 ]; then
             n="${f#"$src"/items/}"
@@ -249,7 +250,8 @@ resplit_tree() {
     # The wallpaper, language, time zone, software list and crontab: to the
     # items that take that kind ("special") now.
     for kind in wallpaper language timezone software crontab; do
-        from="$( { compgen -G "$src/items/*/$kind.txt" || true; } | head -n 1)"
+        from="$(compgen -G "$src/items/*/$kind.txt" || true)"
+        from="${from%%$'\n'*}"              # the first one
         [ -n "$from" ] || continue
         takers=()
         for n in "${ITEM_NAMES[@]}"; do item_has "$n" "$kind" && takers+=("$n"); done
@@ -479,12 +481,14 @@ same_file() {
 #   file lines in the "ignore" fields of the items (see lib/items.sh).
 write_ignore_rules() {
     local n p file
+    local -a ign
     for n in "$@"; do
-        while IFS= read -r p; do
+        ignore_list ign "$n"
+        for p in "${ign[@]+"${ign[@]}"}"; do
             [[ "$p" == "~/"* ]] || continue        # settings: see flat_settings
             file="${p%%:*}"
             printf '%s\thome/%s\t%s\n' "$n" "${file#\~/}" "${p#*:}"
-        done < <(ignore_words "$n")
+        done
     done > "$CC_TMP/ignore-rules.txt"
 }
 
@@ -632,7 +636,7 @@ line_counts() {
 #   into the real one (when lines were left out).
 diff_body() {
     # (the lines may come from a can: vis() writes control characters as
-    # plain letters, see CTRL_AWK in lib/common.sh)
+    # plain letters, see CTRL_AWK in lib/screen.sh)
     awk -v ma="${1:-}" -v mb="${2:-}" -v grey="$C_GREY" -v red="$C_RED" -v green="$C_GREEN" \
         -v off="$C_RESET" -v bm="$B_MINUS" -v bp="$B_PLUS" "$CTRL_AWK"'
         BEGIN { if (ma != "") while ((getline l < ma) > 0) A[++na] = l
@@ -653,7 +657,6 @@ diff_body() {
 #   green = nothing, yellow = differs (system changes: the colour of
 #   [SUDO REQUIRED], also yellow), red = missing.
 summary_line() {
-    count_differences
     info "Summary of the comparison above:" \
         "${SUB}$(status_dot "$CNT_SETTINGS" "$C_YELLOW") $CNT_SETTINGS setting(s) differ" \
         "${SUB}$(status_dot "$CNT_FILES" "$C_YELLOW") $CNT_FILES file(s) differ" \
@@ -662,15 +665,17 @@ summary_line() {
 }
 
 # count_differences -> CNT_SETTINGS, CNT_FILES, CNT_SYSTEM and CNT_MISSING:
-#   how many lines of each kind the comparison found ("diff" and "open"
-#   count the same way).
+#   how many lines of each kind the comparison found. build_comparison
+#   counts once; "diff" and "open" both show these numbers.
 CNT_SETTINGS=0 CNT_FILES=0 CNT_SYSTEM=0 CNT_MISSING=0
 count_differences() {
     # The time zone needs sudo, so it counts as a system change here --
     # the same way its SUDO REQUIRED mark and the "open" messages do.
-    CNT_SETTINGS="$(awk -F'\t' '$2 == "setting" && $3 != "(time zone)"' "$CMP_RESULT" | wc -l)"
-    CNT_FILES="$(awk -F'\t' '$2 == "file" || $2 == "crontab"' "$CMP_RESULT" | wc -l)"
-    CNT_SYSTEM="$(awk -F'\t' '$2 == "system" || $3 == "(time zone)"' "$CMP_RESULT" | wc -l)"
+    read -r CNT_SETTINGS CNT_FILES CNT_SYSTEM < <(awk -F'\t' '
+        $2 == "setting" && $3 != "(time zone)" { s++ }
+        $2 == "file" || $2 == "crontab"        { f++ }
+        $2 == "system" || $3 == "(time zone)"  { y++ }
+        END { print s + 0, f + 0, y + 0 }' "$CMP_RESULT")
     CNT_MISSING="$(wc -l < "$CMP_REFS")"
 }
 

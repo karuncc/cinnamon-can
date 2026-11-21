@@ -23,7 +23,7 @@ read_manifest() {
         function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
         /^\[.*\]$/ { sec = substr($0, 2, length($0) - 2); next }
         /^[ \t]*(#|$)/ { next }
-        # (control characters are left out: see CTRL_FROM in lib/common.sh)
+        # (control characters are left out: see CTRL_FROM in lib/screen.sh)
         { eq = index($0, "="); if (eq) print sec "\t" trim(substr($0, 1, eq - 1)) "\t" trim(novis(substr($0, eq + 1))) }' "$1")
 }
 
@@ -37,6 +37,41 @@ manifest_complete() {
     done
 }
 
+# check_manifest FILE -> reads a can's manifest (FILE, already taken out
+#   of the can) into MAN and checks it. Fails when the can cannot be
+#   used, with CAN_PROBLEM saying why: no-manifest (there is no FILE) or
+#   incomplete. Every can a command is given is read through here
+#   (open_can, can_row, cmd_label), so it is checked the same way
+#   everywhere. (A manifest this run wrote itself, or already checked
+#   here, is read again with read_manifest alone.)
+CAN_PROBLEM=""
+check_manifest() {
+    CAN_PROBLEM=""
+    if [ ! -f "$1" ]; then MAN=(); CAN_PROBLEM="no-manifest"; return 1; fi
+    read_manifest "$1"
+    manifest_complete || { CAN_PROBLEM="incomplete"; return 1; }
+}
+
+# take_manifest CAN FILE -> copies only the manifest out of the can CAN (a
+#   can file, or one unzipped already: tar can tell) into FILE, without
+#   unpacking the rest (no FILE when the can has none). MANIFEST_MEMBER
+#   says how the can names it: "./manifest.txt", as seal makes it, or
+#   "manifest.txt", in a can packed again by hand (open_can unpacks all
+#   and finds either). Fails, with CAN_PROBLEM "damaged", when CAN cannot
+#   be unpacked at all.
+MANIFEST_MEMBER=""
+take_manifest() {
+    local m
+    rm -f "$2"
+    for m in ./manifest.txt manifest.txt; do
+        if tar -xOf "$1" "$m" > "$2" 2>/dev/null; then MANIFEST_MEMBER="$m"; return 0; fi
+    done
+    rm -f "$2"
+    # Not a can at all, or a can without a manifest? (Only then is the
+    # whole file read.)
+    tar -tf "$1" >/dev/null 2>&1 || { CAN_PROBLEM="damaged"; return 1; }
+}
+
 # open_can PATH DIR -> unpacks a can into DIR and reads its manifest.
 open_can() {
     local can="$1" dir="$2"
@@ -46,21 +81,28 @@ open_can() {
     # may hold a file you cannot read, which could then be neither shown
     # nor compared. (Links are left as they are.)
     chmod -R u+rX -- "$dir" 2>/dev/null || true
-    [ -f "$dir/manifest.txt" ] || not_a_can "$can" no-manifest
-    read_manifest "$dir/manifest.txt"
-    manifest_complete || not_a_can "$can" incomplete
+    check_manifest "$dir/manifest.txt" || not_a_can "$can" "$CAN_PROBLEM"
 }
 
-# not_a_can PATH WHY -> stops with what is wrong with the can (WHY:
-#   damaged, no-manifest or incomplete), the can on its own line under it.
-not_a_can() {
-    local why
-    case "$2" in
-        damaged)     why="cannot be unpacked; it is damaged or not a can" ;;
-        no-manifest) why="has no manifest; it was not made by cinnamon-can" ;;
-        *)           why="has an incomplete manifest; it was not made by cinnamon-can" ;;
+# can_problem WHY [row] -> what is wrong with a can, in words (WHY:
+#   damaged, no-manifest or incomplete; see check_manifest). The long form
+#   follows "The specified can ..."; the short one ("row") is a line of
+#   its own, under the can's file name in a list.
+can_problem() {
+    case "$1${2:+-$2}" in
+        damaged)         printf 'cannot be unpacked; it is damaged or not a can' ;;
+        no-manifest)     printf 'has no manifest; it was not made by cinnamon-can' ;;
+        incomplete)      printf 'has an incomplete manifest; it was not made by cinnamon-can' ;;
+        damaged-row)     printf 'The file cannot be unpacked' ;;
+        no-manifest-row) printf 'It has no manifest' ;;
+        *)               printf 'Its manifest is incomplete' ;;
     esac
-    die "The specified can $why:" "${SUB}$(file_dot "$(to_tilde "$1")")"
+}
+
+# not_a_can PATH WHY -> stops with what is wrong with the can (WHY: see
+#   can_problem), the can on its own line under it.
+not_a_can() {
+    die "The specified can $(can_problem "$2"):" "${SUB}$(file_dot "$(to_tilde "$1")")"
 }
 
 # label_or_none TEXT -> TEXT, or a grey "(none)" when there is no label,
@@ -167,8 +209,10 @@ counted() { if [ "$1" -eq 1 ]; then printf '1 %s' "$2"; else printf '%s %ss' "$1
 # show_software TREE -> the full software list of a tree, one row per
 #   kind. Long lists go on over more lines, under the first word.
 show_software() {
-    local f
-    f="$( { find "$1/items" -name software.txt 2>/dev/null || true; } | head -n 1)"
+    local f="" g
+    # Where seal keeps the list (items/ITEM/software.txt), and nowhere else:
+    # a file of yours with that name, kept in an item, is not the list.
+    for g in "$1"/items/*/software.txt; do [ -f "$g" ] && { f="$g"; break; }; done
     [ -n "$f" ] || return 0
     say ""
     info "List of software names stored in the can:" "${C_GREY}For reference only, never installed for you${C_RESET}"
@@ -250,10 +294,8 @@ can_table_head() { table_head 6 "ID" 7 "KIND" 16 "CREATED" 12 "HOST" 14 "MINT / 
 ROW_PROBLEM=""
 can_row() {
     local f="$2" size created kind
-    tar -xzOf "$f" ./manifest.txt > "$CC_TMP/m.txt" 2>/dev/null \
-        || { ROW_PROBLEM="The file cannot be unpacked"; return 1; }
-    read_manifest "$CC_TMP/m.txt"
-    manifest_complete || { ROW_PROBLEM="Its manifest is incomplete"; return 1; }
+    take_manifest "$f" "$CC_TMP/m.txt" && check_manifest "$CC_TMP/m.txt" \
+        || { ROW_PROBLEM="$(can_problem "$CAN_PROBLEM" row)"; return 1; }
     size="$(human_size "$(stat -c %s "$f")")"
     created="${MAN[can.created]:0:16}"
     # "manual" in blue: a can you made yourself (blue like the dot of
@@ -265,8 +307,18 @@ can_row() {
         "${MAN[can.mint_release]} / ${MAN[can.cinnamon_version]}" "$size" "$(short_label "${MAN[can.label]:-}")"
 }
 
-# log_field LINE NAME -> the value of NAME=... in a log line.
-log_field() { printf '%s\n' "$1" | tr ' ' '\n' | sed -n "s/^$2=//p" | tr -d '"' | head -n 1; }
+# log_field LINE NAME -> the value of NAME=... in a log line (the first
+#   one, without quotes).
+log_field() {
+    local w
+    local -a fields
+    IFS=$' \t\n' read -r -a fields <<< "$1"
+    for w in "${fields[@]+"${fields[@]}"}"; do
+        [[ "$w" == "$2="* ]] || continue
+        w="${w#"$2="}"; printf '%s\n' "${w//\"/}"
+        return 0
+    done
+}
 
 
 # ---------------------------------------------------------------------------
@@ -385,7 +437,7 @@ show_one_file() {
         lines="$(awk 'END { print NR }' "$f")"
         say "${SUB}$(file_dot "$label")  ${C_GREY}($(counted "$lines" line))${C_RESET}"
         # (the lines come from the can: vis() writes control characters
-        # as plain letters, see CTRL_AWK in lib/common.sh)
+        # as plain letters, see CTRL_AWK in lib/screen.sh)
         awk -v grey="$C_GREY" -v off="$C_RESET" "$CTRL_AWK"'
             { printf "    %s%4d%s   %s\n", grey, NR, off, vis($0) }' "$f"
     else

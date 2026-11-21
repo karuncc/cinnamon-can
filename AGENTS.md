@@ -37,7 +37,9 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
   pipe into `grep -q` (or `head`) can fail on long input: it stops reading
   at the first match, the command before it is cut off, and the pipe
   counts as failed (search a variable with `[[ $x == *text* ]]` or
-  `grep -q ... <<< "$x"` instead).
+  `grep -q ... <<< "$x"` instead; `test/01-syntax.sh` fails on a pipe
+  into `head` or `grep -q`). The same holds for `awk` that stops with
+  `exit` behind a pipe: let it read to the end instead.
 - sudo is only used by `sudo cinnamon-can open CAN`. The program then
   re-runs itself as the real user (`CC_SYSTEM_RESTORE=1`) and calls `sudo`
   only to write system files. Never run anything else as root.
@@ -52,9 +54,12 @@ A small command-line tool that keeps a Linux Mint Cinnamon desktop in
 ```
 cinnamon-can          command line, sudo hand-over, dispatch to lib/
 items/*.item          built-in items (one file per item)
-lib/common.sh         screen layout and messages, temp folder, INI
-                      reading, config, system facts, can IDs and lookup,
-                      log, utilities
+lib/common.sh         loads the three files below; temp folder, system
+                      facts and start-up checks, paths and files
+lib/screen.sh         screen layout and messages, text from a can,
+                      commands to copy, the pager
+lib/config.sh         INI reading, the config, the backup folder
+lib/cans.sh           can IDs and file names, lookup, labels, the log
 lib/items.sh          reads item files, item_on, patterns for the awk
                       files, the ignore rules
 lib/dconf.awk         sorts dconf settings into items (longest path wins)
@@ -67,7 +72,11 @@ lib/diff.sh           views, comparison, the diff report
 lib/seal.sh           seal, package_can
 lib/open.sh           open: summary, confirm, autocan, apply, log, restart
 lib/manage.sh         label (swaps only the manifest), delete
-test/run-tests.sh     the test script (safe to run on this computer)
+test/run-tests.sh     runs the test files at the same time, shows their
+                      results in order (safe to run on this computer)
+test/lib.sh           what the test files share: temporary folder,
+                      stand-ins, checks, the screen layout of results
+test/NN-topic.sh      the checks, one file per part of the program
 config/example.conf   the documented example config (the only tracked one)
 README.md             the user guide
 AGENTS.md             these rules (CLAUDE.md is a link to it)
@@ -135,7 +144,7 @@ LICENSE               MIT
 
 ## Screen output
 
-Every command prints in the same layout (helpers in `lib/common.sh`):
+Every command prints in the same layout (helpers in `lib/screen.sh`):
 
 - Two columns: a 9-character left column for a status badge (`info`,
   `ok`, `warn`, `err`) or a mark (`-`/`+`, `[NEW]`/`[DEL]`, and `UNDO` for
@@ -185,28 +194,41 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
 
 ## Testing
 
-- After every change, run the test script (it starts with `bash -n` on
+- After every change, run the tests (`01-syntax.sh` runs `bash -n` on
   every script):
 
       bash test/run-tests.sh
 
-  It needs no set-up, writes only into its own temporary folder, and
-  never touches the real backup folder or any setting: `open` only ever
-  gets closed input, so it can never read a `yes`, and a fake `systemctl`
-  is first in PATH. What needs odd files or folders (files you cannot
-  read, a read-only or FAT backup folder) runs the program with a home
-  folder of its own (`HOME` inside that temporary folder), and a
-  stand-in `chmod`, `dconf` or pager where the real one would not do.
-  It stops by itself on a can that already matches, on
-  one where only system files differ, and right after its summary on one
-  that differs (no terminal to ask in); its restart question is tried on
-  its own, with that fake. `delete` gets its answers through `script`
-  (which gives it a terminal) and only deletes the test's own cans. A
-  few tests compare a can against
-  the LIVE computer and can fail when a setting changes mid-run — run the
-  script again before hunting for a bug. New behaviour should come with a
-  new check in this script.
-- The script cannot find noise: it seals and compares within seconds,
+  The command runs every `test/NN-topic.sh` at the same time and shows
+  their results in order, in the program's own screen layout; `bash
+  test/run-tests.sh pager 14` runs only the files with that word or
+  number in their name, and a file also runs on its own (`bash
+  test/13-pager.sh`). The files that test with a can of this computer
+  all get a copy of one can that the runner seals first. A `[SKIP]` is a
+  check this computer cannot try (the can has no software list ...): it
+  is counted, never a failure. Ctrl+C stops every file and leaves
+  nothing behind.
+  The tests need no set-up, each file writes only into a temporary
+  folder of its own, and they never touch the real backup folder or any
+  setting: `open` only ever gets closed input, so it can never read a
+  `yes`, and a fake `systemctl` is first in PATH. What needs odd files
+  or folders (files you cannot read, a read-only or FAT backup folder)
+  runs the program with a home folder of its own (`HOME` inside that
+  temporary folder), and a stand-in `chmod`, `dconf` or pager where the
+  real one would not do. `open` stops by itself on a can that already
+  matches, on one where only system files differ, and right after its
+  summary on one that differs (no terminal to ask in); its restart
+  question is tried on its own, with that fake. `delete` gets its
+  answers through `script` (which gives it a terminal) and only deletes
+  the test's own cans. A few tests compare a can against the LIVE
+  computer and can fail when a setting changes mid-run — run the tests
+  again before hunting for a bug. New behaviour should come with a new
+  check, in the file of its part of the program (or a new
+  `NN-topic.sh`: `source "$(dirname "$0")/lib.sh"`, a `section`, the
+  checks, `finish`). A file that loads the program's code
+  (`lib/common.sh`) does it with `>/dev/null`, so the program's badges
+  are plain words even in a terminal, as the checks expect.
+- The tests cannot find noise: they seal and compare within seconds,
   before anything has had time to change by itself. Before a release, also
   check over time: `seal`, use the computer normally for a day (move and
   resize windows, switch the input language, open the usual apps), then
@@ -215,7 +237,7 @@ Every command prints in the same layout (helpers in `lib/common.sh`):
   once, so also look through the schemas of the installed apps
   (`/usr/share/glib-2.0/schemas/`) for window sizes, "last", "recent" and
   "history".
-- NOT covered by the script: really applying a can (`open` + `yes`),
+- NOT covered by the tests: really applying a can (`open` + `yes`),
   sudo, language, system files and the restart itself. For those, the rules
   below apply.
 - On the development machine run only `seal`, `list`, `peek`, `diff`, and
@@ -246,7 +268,9 @@ ready-to-paste block, and describe GitHub steps as clicks, not commands.
 Whoever types it, person or AI, every branch, commit, pull request and
 release follows `CONTRIBUTING.md` in this folder; nothing outside the
 repo is needed. Changes reach this repository as pull requests under the
-same rules.
+same rules: branches start from `dev` and their pull requests go into
+`dev`; `main` only changes with a release (a pull request from `dev`)
+or a hotfix (`CONTRIBUTING.md`, Branches).
 
 Before proposing a commit message, read the repository's actual state
 (`git status`, `git diff`, the current branch) and describe what really
